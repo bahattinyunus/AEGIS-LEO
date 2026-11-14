@@ -19,6 +19,20 @@ from aegis_leo.agents.compliance_agent import ComplianceWatchdogAgent
 from aegis_leo.agents.disposal_agent import ReentryDisposalAgent
 from aegis_leo.agents.commander_agent import MissionCommanderAgent
 from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
+from aegis_leo.agents.swarm_telemetry_bus import (
+    TelemetryPriority,
+    EventSeverity,
+    BackpressureStrategy,
+    TelemetryFrame,
+    StructuredEvent,
+    StructuredEventLogger,
+    ReplayBuffer,
+    TelemetrySubscription,
+    SwarmTelemetryBus,
+    create_swarm_bus,
+    SWARM_AGENTS,
+    match_topic,
+)
 
 __all__ = [
     "BaseSwarmAgent",
@@ -36,4 +50,16 @@ __all__ = [
     "ReentryDisposalAgent",
     "MissionCommanderAgent",
     "OrbitalSwarmOrchestrator",
+    "TelemetryPriority",
+    "EventSeverity",
+    "BackpressureStrategy",
+    "TelemetryFrame",
+    "StructuredEvent",
+    "StructuredEventLogger",
+    "ReplayBuffer",
+    "TelemetrySubscription",
+    "SwarmTelemetryBus",
+    "create_swarm_bus",
+    "SWARM_AGENTS",
+    "match_topic",
 ]

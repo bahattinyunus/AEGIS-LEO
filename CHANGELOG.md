@@ -5,6 +5,21 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-11-14
+
+### Added
+- **Multi-Agent Swarm Collaborative Expansion (9 Parallel Specialist Agents)**:
+  - `solar-worker` (`aegis_leo/physics/perturbations.py`): Solar Radiation Pressure (SRP) cannonball model with dual-cone shadows & Battin algebraic third-body Sun/Moon gravitational perturbations.
+  - `thermo-worker` (`aegis_leo/physics/drag_cross_section.py`): Variable attitude ballistic coefficient dynamics, solar array cross-sectional area tracking (1-DOF/2-DOF SADM), and Sentman free-molecular drag model.
+  - `risk-worker` (`aegis_leo/risk/foster_bplane.py`): Foster (1992) numerical B-plane integration via Gauss-Legendre quadrature & Chan (1997) analytical series with Alfano/CARA maximum collision probability.
+  - `astro-worker` (`aegis_leo/ai/low_thrust.py`): Continuous low-thrust trajectory planner for Hall effect ion thrusters with Edelbaum analytical equations, RK4 micro-thrust integration, and orbit restoration cycles.
+  - `edge-worker` (`aegis_leo/ai/hardware_telemetry.py`): Space-grade flight computer hardware watchdog (SEU SECDED tracking, thermal cycle monitor, DVFS clock throttling, INT8 canary memory guards).
+  - `fleet-worker` (`aegis_leo/screening/stationkeeping.py`): Constellation slot stationkeeping delta-v budgeting and Walker-Delta intra-plane drift phasing with Kuhn-Munkres Hungarian optimal assignment.
+  - `audit-worker` (`aegis_leo/compliance/odar_generator.py`): NASA-STD-8719.14B Section 4 formal Orbital Debris Assessment Report (ODAR) Markdown and JSON document generator.
+  - `disposal-worker` (`aegis_leo/physics/reentry_footprint.py`): Point Nemo (SPOUA) Monte Carlo reentry ground impact dispersion ellipse calculation with 1-3 sigma casualty risk contours.
+  - `commander-worker` (`aegis_leo/agents/swarm_telemetry_bus.py`): High-speed pub/sub telemetry streaming bus, circular replay buffer, and SHA-256 tamper-evident structured event logger.
+- **Test Suite Expansion**: Repository tests expanded from 53 to **149 passed tests** (100% pass rate).
+
 ## [1.2.0] - 2026-11-14
 
 ### Added
