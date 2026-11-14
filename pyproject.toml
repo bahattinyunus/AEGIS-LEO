@@ -32,6 +32,9 @@ dependencies = [
     "plotly>=5.20.0",
 ]
 
+[project.scripts]
+aegis = "aegis_leo.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",

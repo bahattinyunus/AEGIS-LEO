@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  aegis-api:
+    build: .
+    container_name: aegis_leo_api
+    ports:
+      - "8000:8000"
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+
+  aegis-dashboard:
+    build: .
+    container_name: aegis_leo_dashboard
+    ports:
+      - "8501:8501"
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
+    depends_on:
+      - aegis-api
+    environment:
+      - ENVIRONMENT=production

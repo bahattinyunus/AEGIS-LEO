@@ -1,0 +1,44 @@
+name: AEGIS-LEO CI & Astrodynamics Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test & Validate Physics on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest httpx
+
+    - name: Execute Pytest Suite (30+ Verification Tests)
+      run: |
+        pytest -v --tb=short
+
+    - name: Execute End-to-End Simulation Pipeline
+      run: |
+        python demo_script.py
+
+    - name: Verify Aegis CLI
+      run: |
+        python -m aegis_leo.cli status
+        python -m aegis_leo.cli eval --miss 0.45 --kp 8.0
+        python -m aegis_leo.cli monte-carlo --trials 500
