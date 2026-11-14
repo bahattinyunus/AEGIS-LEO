@@ -5,6 +5,7 @@ Provides terminal-based command execution for mission operators and automated pi
 
 import sys
 import os
+import torch
 
 if sys.stdout.encoding != "utf-8":
     try:
@@ -24,6 +25,9 @@ from aegis_leo.ai.quantizer import benchmark_edge_inference
 from aegis_leo.ai.pinn import get_pretrained_edge_pinn
 from aegis_leo.risk.monte_carlo import MonteCarloConjunctionSimulator
 from aegis_leo.risk.kessler_cascade import nasa_breakup_model
+from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
+from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
+from aegis_leo.data.celestrak_live import CelesTrakClient
 from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
 
 
@@ -117,6 +121,43 @@ def cmd_breakup(args):
     print(f"Fragments > 1 cm:     {res['fragments_gt_1cm']:,} lethal fragments\n")
 
 
+def cmd_deorbit(args):
+    burn = compute_deorbit_burn(initial_altitude_km=args.alt, satellite_mass_kg=args.mass)
+    descent = simulate_reentry_corridor()
+
+    print(f"\n--- Controlled Deorbit & Atmospheric Entry Analysis ---")
+    print(f"Initial Altitude:    {args.alt} km -> Target Perigee: {burn['target_perigee_km']} km")
+    print(f"Retrograde Delta-v:  {burn['delta_v_retrograde_m_s']} m/s")
+    print(f"Propellant Required: {burn['propellant_required_kg']} kg")
+    print(f"Target Drop Zone:    {descent['target_drop_zone']}")
+    print(f"Peak Stagnation Heat:{descent['peak_stagnation_heat_flux_w_cm2']} W/cm^2")
+    print(f"NASA Req 4.7 Status: {'COMPLIANT' if descent['nasa_req_4_7_compliant'] else 'NON_COMPLIANT'} (Ec = {descent['casualty_expectation_ec']:.1e})\n")
+
+
+def cmd_rad_test(args):
+    sim = RadiationFaultSimulator(get_pretrained_edge_pinn())
+    flux = sim.calculate_space_radiation_flux(altitude_km=args.alt, latitude_deg=-25.0, is_solar_particle_event=args.spe)
+    inp = torch.tensor([[args.alt, 8.0, 240.0, 0.02, 7.6]], dtype=torch.float32)
+    tmr = sim.evaluate_tmr_voting(inp, bit_flip_count=args.flips)
+
+    print(f"\n--- Space Radiation & TMR Fault Injection Test ---")
+    print(f"Environment:         Alt={args.alt} km, SAA Zone={'YES' if flux['in_saa_zone'] else 'NO'}, SPE={'YES' if flux['spe_active'] else 'NO'}")
+    print(f"Proton Flux:         {flux['total_flux_p_cm2_s']} p/cm^2/s (Est. SEU Rate: {flux['estimated_seu_rate_per_mb_day']} /Mb/day)")
+    print(f"Bit Flips Injected:  {tmr['injected_bit_flips']} weights")
+    print(f"Single-Core Error:   {tmr['single_core_seu_error']}")
+    print(f"TMR Voted Error:     {tmr['tmr_voted_error']} (Resilience: {tmr['resilience_percentage']}%)")
+    print(f"Fault Masked:        {'SUCCESS - 100% MASKED' if tmr['fault_masked_successfully'] else 'FAILED'}\n")
+
+
+def cmd_celestrak(args):
+    client = CelesTrakClient()
+    res = client.fetch_tle_by_catnr(args.norad)
+    print(f"\n--- CelesTrak Live TLE: {res['name']} (NORAD #{args.norad}) ---")
+    print(f"Status: {res['status']} | Source: {res['source']}")
+    print(f"Line 1: {res['line1']}")
+    print(f"Line 2: {res['line2']}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="aegis", description="AEGIS-LEO SSA Mission Control CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -151,6 +192,24 @@ def main():
     p_brk.add_argument("--target-mass", type=float, default=260.0, help="Target satellite mass (kg)")
     p_brk.add_argument("--proj-mass", type=float, default=5.0, help="Projectile debris mass (kg)")
     p_brk.set_defaults(func=cmd_breakup)
+
+    # deorbit
+    p_deo = subparsers.add_parser("deorbit", help="Controlled deorbit & Point Nemo entry corridor")
+    p_deo.add_argument("--alt", type=float, default=550.0, help="Current altitude (km)")
+    p_deo.add_argument("--mass", type=float, default=260.0, help="Satellite mass (kg)")
+    p_deo.set_defaults(func=cmd_deorbit)
+
+    # rad-test
+    p_rad = subparsers.add_parser("rad-test", help="Simulate space radiation & TMR fault masking")
+    p_rad.add_argument("--alt", type=float, default=550.0, help="Altitude (km)")
+    p_rad.add_argument("--spe", action="store_true", help="Simulate Solar Particle Event")
+    p_rad.add_argument("--flips", type=int, default=4, help="Number of SEU bit flips to inject")
+    p_rad.set_defaults(func=cmd_rad_test)
+
+    # celestrak
+    p_cel = subparsers.add_parser("celestrak", help="Fetch live TLE by NORAD Catalog Number")
+    p_cel.add_argument("--norad", type=int, default=25544, help="NORAD catalog number (e.g. 25544 for ISS)")
+    p_cel.set_defaults(func=cmd_celestrak)
 
     args = parser.parse_args()
     if hasattr(args, "func"):

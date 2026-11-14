@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+import torch
+import numpy as np
 
 from aegis_leo.constants import (
     EARTH_RADIUS_KM,
@@ -38,6 +40,10 @@ from aegis_leo.screening.constellation_screen import (
 )
 from aegis_leo.ai.pareto_optimizer import ParetoManeuverOptimizer
 from aegis_leo.data.live_feeds import LiveSpaceWeatherFeed
+from aegis_leo.data.celestrak_live import CelesTrakClient
+from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
+from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
+from aegis_leo.risk.covariance_visualizer import generate_covariance_ellipsoid_mesh
 
 app = FastAPI(
     title="AEGIS-LEO Mission Control API",
@@ -416,6 +422,55 @@ def get_ground_track(
         "ground_track": track[::4],  # Sampled for compact response
         "blackout_analysis": blackout_analysis,
     }
+
+
+# --- Radiation & SEU Fault Injection Endpoint ---
+
+@app.get("/api/radiation/simulate-faults")
+def simulate_radiation_faults(
+    altitude_km: float = 550.0,
+    is_spe: bool = False,
+    bit_flips: int = Query(4, ge=1, le=20),
+):
+    sim = RadiationFaultSimulator(edge_pinn)
+    flux = sim.calculate_space_radiation_flux(altitude_km, latitude_deg=-25.0, is_solar_particle_event=is_spe)
+    inp = torch.tensor([[altitude_km, 8.0, 240.0, 0.02, 7.6]], dtype=torch.float32)
+    tmr = sim.evaluate_tmr_voting(inp, bit_flip_count=bit_flips)
+    return {"flux_environment": flux, "tmr_fault_evaluation": tmr}
+
+
+# --- Controlled Deorbit & Point Nemo Endpoint ---
+
+@app.get("/api/deorbit/simulate-trajectory")
+def simulate_deorbit_endpoint(
+    altitude_km: float = 550.0,
+    satellite_mass_kg: float = 260.0,
+):
+    burn = compute_deorbit_burn(altitude_km, target_perigee_km=65.0, satellite_mass_kg=satellite_mass_kg)
+    descent = simulate_reentry_corridor()
+    return {"burn_plan": burn, "reentry_descent": descent, "point_nemo_target": POINT_NEMO}
+
+
+# --- Live CelesTrak TLE Endpoint ---
+
+@app.get("/api/celestrak/fetch-tle/{norad_id}")
+def fetch_celestrak_tle(norad_id: int):
+    client = CelesTrakClient()
+    return client.fetch_tle_by_catnr(norad_id)
+
+
+# --- 3D Covariance Ellipsoid Endpoint ---
+
+@app.get("/api/conjunction/covariance-ellipsoid")
+def get_covariance_ellipsoid(
+    sigma_radial: float = 0.2,
+    sigma_intrack: float = 0.85,
+    sigma_crosstrack: float = 0.3,
+):
+    center = np.array([0.0, 0.0, 0.0])
+    return generate_covariance_ellipsoid_mesh(
+        center, sigma_radial_km=sigma_radial, sigma_intrack_km=sigma_intrack, sigma_crosstrack_km=sigma_crosstrack
+    )
 
 
 # --- Interactive 3D Web HUD Dashboard ---

@@ -6,7 +6,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-36%2F36%20Geçti-brightgreen.svg?style=for-the-badge)]()
+[![Testler](https://img.shields.io/badge/Testler-41%2F41%20Geçti-brightgreen.svg?style=for-the-badge)]()
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 <p align="center">
@@ -164,7 +164,7 @@ $$\mathcal{L} = \mathcal{L}_{veri} + \lambda_{fizik} \left\| a_{drag}^{pred} - \
 
 ---
 
-## 🖥️ 5 Sekmeli Görev Kontrol Simülatörü
+## 🖥️ 8 Sekmeli Görev Kontrol Simülatörü
 
 Arayüzü başlatmak için:
 ```bash
@@ -192,6 +192,17 @@ streamlit run app.py
 │ [Sekme 5: 🔬 Atmosfer Modelleri Laboratuvarı]                                 │
 │  Üstel Model, Jacchia-77 ve NRLMSISE-00 modellerini LEO irtifaları boyunca     │
 │  logaritmik eğrilerle yan yana karşılaştırır.                                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Sekme 6: ☢️ Radyasyon & TMR Hata Toleransı Simülatörü]                      │
+│  Güney Atlantik Anomalisi (SAA) ve Güneş Parçacık Olayı (SPE) altında         │
+│  ağırlıklara SEU bit-flip enjekte ederek TMR çoğunluk oylamasını test eder. │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Sekme 7: 🎯 Deorbit & Point Nemo Güvenli Giriş Simülatörü]                  │
+│  Point Nemo hedefli retro-ateşleme, hipersonik atmosferik giriş ve aerotermal │
+│  yanma modeli ile NASA Req 4.7 can güvenliği değerlendirmesi.                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Sekme 8: 🌐 Canlı CelesTrak TLE Sorgulama Motoru]                           │
+│  NORAD ID ile CelesTrak ve Space-Track üzerinden canlı TLE verisi çeker.      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -208,6 +219,9 @@ Komut satırı aracı, terminal ortamında tam teşekküllü görev operasyonlar
 | `burn` | Otonom kaçınma ateşlemesini planlar | `python -m aegis_leo.cli burn --sat STARLINK_LEO --miss 0.45` |
 | `monte-carlo` | Monte Carlo kovaryans dağılımı simülasyonu | `python -m aegis_leo.cli monte-carlo --miss 0.45 --trials 1000` |
 | `breakup` | NASA standart parçalanma kaskad modeli | `python -m aegis_leo.cli breakup --target-mass 260.0 --proj-mass 5.0` |
+| `deorbit` | Point Nemo hedefli kontrollü deorbit analizi | `python -m aegis_leo.cli deorbit --alt 550.0 --mass 260.0` |
+| `rad-test` | SAA/SPE radyasyon & TMR hata toleransı testi | `python -m aegis_leo.cli rad-test --alt 550.0 --flips 4` |
+| `celestrak` | CelesTrak'ten canlı TLE yörünge elemanı çeker | `python -m aegis_leo.cli celestrak --norad 25544` |
 
 ---
 
