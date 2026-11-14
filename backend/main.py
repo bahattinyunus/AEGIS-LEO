@@ -44,6 +44,8 @@ from aegis_leo.data.celestrak_live import CelesTrakClient
 from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
 from aegis_leo.risk.covariance_visualizer import generate_covariance_ellipsoid_mesh
+from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
+
 
 app = FastAPI(
     title="AEGIS-LEO Mission Control API",
@@ -473,7 +475,66 @@ def get_covariance_ellipsoid(
     )
 
 
+class SwarmTelemetryRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    altitude_km: float = 450.0
+    inclination_deg: float = 53.0
+    miss_distance_km: float = 0.082
+    relative_speed_km_s: float = 11.2
+    tca_hours: float = 3.4
+    fuel_remaining_kg: float = 18.2
+    kp: float = 7.5
+    f10_7: float = 245.0
+
+
+_global_swarm_orchestrator = OrbitalSwarmOrchestrator()
+
+
+@app.get("/api/swarm/status", summary="Get status of all 9 onboard autonomous agents")
+def get_swarm_status():
+    """
+    Returns live health, status, role, and recent operational decisions
+    for all 9 onboard agents in the AEGIS-LEO swarm intelligence hierarchy.
+    """
+    return {
+        "status": "ONLINE",
+        "agent_count": 9,
+        "swarm_roster": _global_swarm_orchestrator.get_agent_status(),
+        "recent_messages": _global_swarm_orchestrator.blackboard.get_recent_messages(10),
+    }
+
+
+def _sanitize_for_json(obj):
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    if isinstance(obj, (np.floating, float)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
+
+
+@app.post("/api/swarm/consensus-cycle", summary="Execute 9-agent autonomous consensus cycle")
+def execute_swarm_consensus_cycle(req: SwarmTelemetryRequest):
+    """
+    Triggers an end-to-end consensus cycle across all 9 onboard agents:
+    Sensing -> Risk Assessment -> Astrodynamics -> Edge-AI -> Constellation Consensus
+    -> Compliance Watchdog -> Reentry Disposal -> Mission Commander Directive.
+    """
+    telemetry = req.model_dump()
+    result = _global_swarm_orchestrator.run_consensus_cycle(telemetry)
+    return _sanitize_for_json(result)
+
+
+
 # --- Interactive 3D Web HUD Dashboard ---
+
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def serve_dashboard():

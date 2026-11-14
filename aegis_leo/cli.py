@@ -29,6 +29,7 @@ from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_
 from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.data.celestrak_live import CelesTrakClient
 from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
+from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
 
 
 def cmd_status(args):
@@ -158,6 +159,52 @@ def cmd_celestrak(args):
     print(f"Line 2: {res['line2']}\n")
 
 
+def cmd_swarm(args):
+    orchestrator = OrbitalSwarmOrchestrator()
+    telemetry = {
+        "satellite_id": args.sat,
+        "altitude_km": args.alt,
+        "inclination_deg": 53.0,
+        "miss_distance_km": args.miss,
+        "kp": args.kp,
+        "f10_7": args.f107,
+        "fuel_remaining_kg": args.fuel,
+    }
+    result = orchestrator.run_consensus_cycle(telemetry)
+
+    print("\n" + "=" * 75)
+    print(">> AEGIS-LEO 9-AGENT AUTONOMOUS ORBITAL SWARM CONSENSUS CYCLE <<")
+    print("=" * 75)
+    print(f"Cycle ID:    #{result['cycle_id']} | UTC: {result['timestamp']}")
+    print(f"Target Sat:  {telemetry['satellite_id']} (Alt: {telemetry['altitude_km']} km, Fuel: {telemetry['fuel_remaining_kg']} kg)")
+    print(f"Telemetry:   Miss={telemetry['miss_distance_km']*1000:.1f} m, Kp={telemetry['kp']:.1f}, F10.7={telemetry['f10_7']:.0f} SFU")
+    print("-" * 75)
+    print("SWARM ROSTER & ONBOARD AGENT DECISIONS (9 AGENTS):")
+    for code, agent_res in result["agent_results"].items():
+        name = agent_res.get("agent", code)
+        status = agent_res.get("status", "ACTIVE")
+        decision = agent_res.get("decision", "Nominal")
+        print(f"  [{status:<6}] {name:<28}: {decision}")
+
+    print("-" * 75)
+    print("CONSENSUS VOTING LEDGER:")
+    for vote in result["swarm_votes"]:
+        agent_name = vote.get("agent", "")
+        v_choice = vote.get("vote", "")
+        conf = vote.get("confidence", 1.0) * 100
+        reason = vote.get("reason", "Approved")
+        print(f"  * {agent_name:<28} -> [{v_choice:<8}] (conf: {conf:.0f}%): {reason}")
+
+    cmd = result["commander_directive"]
+    print("=" * 75)
+    print(f">> MISSION COMMANDER DIRECTIVE: {cmd['directive']}")
+    print(f"   Status:            {cmd['status']}")
+    print(f"   Consensus Ratio:   {cmd['approval_percentage']}% ({cmd['approval_ratio']*100:.1f}% approved)")
+    print(f"   Crypto Signature:  {cmd['authorization_signature']}")
+    print("=" * 75 + "\n")
+
+
+
 def main():
     parser = argparse.ArgumentParser(prog="aegis", description="AEGIS-LEO SSA Mission Control CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -210,6 +257,17 @@ def main():
     p_cel = subparsers.add_parser("celestrak", help="Fetch live TLE by NORAD Catalog Number")
     p_cel.add_argument("--norad", type=int, default=25544, help="NORAD catalog number (e.g. 25544 for ISS)")
     p_cel.set_defaults(func=cmd_celestrak)
+
+    # swarm
+    p_swm = subparsers.add_parser("swarm", help="Run 9-agent autonomous orbital swarm consensus cycle")
+    p_swm.add_argument("--sat", default="STARLINK_LEO", help="Target satellite ID")
+    p_swm.add_argument("--alt", type=float, default=450.0, help="Orbital altitude (km)")
+    p_swm.add_argument("--miss", type=float, default=0.082, help="Conjunction miss distance (km)")
+    p_swm.add_argument("--kp", type=float, default=7.5, help="Geomagnetic Kp index")
+    p_swm.add_argument("--f107", type=float, default=245.0, help="F10.7 solar flux (SFU)")
+    p_swm.add_argument("--fuel", type=float, default=18.5, help="Propellant remaining (kg)")
+    p_swm.set_defaults(func=cmd_swarm)
+
 
     args = parser.parse_args()
     if hasattr(args, "func"):

@@ -82,3 +82,29 @@ def test_dashboard_endpoint():
     response = client.get("/dashboard")
     assert response.status_code == 200
     assert "AEGIS-LEO" in response.text
+
+
+def test_swarm_endpoints():
+    # Test GET status
+    resp_status = client.get("/api/swarm/status")
+    assert resp_status.status_code == 200
+    data_status = resp_status.json()
+    assert data_status["agent_count"] == 9
+    assert len(data_status["swarm_roster"]) == 9
+
+    # Test POST consensus cycle
+    payload = {
+        "satellite_id": "AEGIS-ALPHA",
+        "altitude_km": 450.0,
+        "miss_distance_km": 0.075,
+        "kp": 8.0,
+        "f10_7": 260.0,
+        "fuel_remaining_kg": 18.0,
+    }
+    resp_cycle = client.post("/api/swarm/consensus-cycle", json=payload)
+    assert resp_cycle.status_code == 200
+    data_cycle = resp_cycle.json()
+    assert data_cycle["commander_directive"]["consensus_reached"] is True
+    assert "AEGIS-SIG-" in data_cycle["commander_directive"]["authorization_signature"]
+    assert len(data_cycle["swarm_votes"]) == 9
+

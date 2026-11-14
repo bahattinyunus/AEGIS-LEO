@@ -6,7 +6,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-41%2F41%20Geçti-brightgreen.svg?style=for-the-badge)]()
+[![Testler](https://img.shields.io/badge/Testler-53%2F53%20Geçti-brightgreen.svg?style=for-the-badge)]()
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 <p align="center">
@@ -23,6 +23,7 @@ Platform; **Güneş fırtınalarının (CME) tetiklediği ani termosferik genle�
 
 ## 📑 İçindekiler
 - [🎯 Çözülen Kritik Problem & Tarihsel Arka Plan](#-çözülen-kritik-problem--tarihsel-arka-plan)
+- [🤖 9-Ajanlı Otonom Sürü Zekası Mimarisi (Swarm Intelligence)](#-9-ajanlı-otonom-sürü-zekası-mimarisi-swarm-intelligence)
 - [⚡ Temel İnovasyonlar & Bilimsel Derinlik](#-temel-inovasyonlar--bilimsel-derinlik)
   - [1. Çok Modelli Termosferik Sürüklenme Fiziği](#1-çok-modelli-termosferik-sürüklenme-fiziği)
   - [2. Uyarlanabilir Risk İndeksi (A-DRI) Formülasyonu](#2-uyarlanabilir-risk-indeksi-a-dri-formülasyonu)
@@ -30,7 +31,7 @@ Platform; **Güneş fırtınalarının (CME) tetiklediği ani termosferik genle�
   - [4. Walker Delta Takımyıldız & Enkaz Taraması](#4-walker-delta-takımyıldız--enkaz-taraması)
   - [5. Yer İstasyonları & İletişim Kesintisi (Blackout)](#5-yer-istasyonları--iletişim-kesintisi-blackout)
 - [🏗️ Sistem Mimarisi](#️-sistem-mimarisi)
-- [🖥️ 5 Sekmeli Görev Kontrol Simülatörü](#️-5-sekmeli-görev-kontrol-simülatörü)
+- [🖥️ 9 Sekmeli Görev Kontrol Simülatörü](#️-9-sekmeli-görev-kontrol-simülatörü)
 - [💻 Profesyonel Aegis CLI Rehberi](#-profesyonel-aegis-cli-rehberi)
 - [🌐 REST API Dokümantasyonu (FastAPI)](#-rest-api-dokümantasyonu-fastapi)
 - [📋 NASA-STD-8719.14 Uyumluluk Matrisi](#-nasa-std-871914-uyumluluk-matrisi)
@@ -38,6 +39,7 @@ Platform; **Güneş fırtınalarının (CME) tetiklediği ani termosferik genle�
 - [🧪 Doğrulama & Test Paketi](#-doğrulama--test-paketi)
 - [🐳 Docker Konteynerizasyonu](#-docker-konteynerizasyonu)
 - [👥 AYAZ Takımı & Lisans](#-ayaz-takımı--lisans)
+
 
 ---
 
@@ -52,6 +54,54 @@ Alçak Dünya Yörüngesinde (LEO: 160 – 2.000 km) görev yapan binlerce uydu,
 **AEGIS-LEO**, uydunun uçuş bilgisayarına (Onboard Edge-AI) yerleştirilen yapay zeka ve fizik motoru sayesinde bu problemi kökten çözer.
 
 ---
+
+## 🤖 9-Ajanlı Otonom Sürü Zekası Mimarisi (Swarm Intelligence)
+
+Güneş fırtınaları sırasında iyonosferik plazma tabakasının aşırı ısınması ve kutup auroral emilimi (PCA), yer istasyonları ile LEO uyduları arasındaki telsiz telemetri bağlantısını tamamen keser (**Ground Communication Blackout**). Bu kritik pencerede uyduların yer kontrol merkezini beklemesi felaketle sonuçlanır. 
+
+AEGIS-LEO, uzay aracının uçuş yazılımı (FSW) içerisinde eşzamansız çalışan **9 uzmanlaşmış otonom ajandan oluşan dağıtık bir sürü zekası** mimarisi içerir:
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│               AEGIS-LEO 9-AJANLI DAĞITIK UÇUŞ YAZILIMI SÜRÜ ZEKASI HİYERARŞİSİ        │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  [FAZ 1: ALGILAMA]        ☀️ A1: SolarStormAgent        🌌 A2: ThermosphereAgent       │
+│                                      │                             │                   │
+│                                      ▼                             ▼                   │
+│  [FAZ 2: RİSK TESPİTİ]                       ⚠️ A3: RiskAssessmentAgent                │
+│                                                            │                           │
+│                                      ┌─────────────────────┴─────────────────────┐     │
+│                                      ▼                                           ▼     │
+│  [FAZ 3: MANEVRA & YAPAY ZEKA] 🚀 A4: AstrodynamicsAgent     🧠 A5: EdgeInferenceAgent │
+│                                      │                                           │     │
+│                                      └─────────────────────┬─────────────────────┘     │
+│                                                            ▼                           │
+│  [FAZ 4: EŞGÜDÜM & DENETİM]    🛰️ A6: ConstellationAgent    🛡️ A7: ComplianceWatchdog  │
+│                                                            🎯 A8: ReentryDisposal      │
+│                                                            │                           │
+│                                                            ▼                           │
+│  [FAZ 5: BİZANS KONSENSÜSÜ]                 🎖️ A9: MissionCommanderAgent              │
+│                                          (Kriptografik İmza & Ateşleme Emri)           │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🛰️ 9 Uç Nokta Ajanının Görev ve Yetki Matrisi:
+
+| Ajan No | Ajan Adı & Rolü | Sorumluluk Alanı | Ağırlık | Veto Yetkisi |
+| :---: | :--- | :--- | :---: | :---: |
+| **A1** | `SolarStormAgent-01` | NOAA SWPC güneş rüzgarı, CME hızı, proton akısı ve Kp endeksini izler; fırtına uyarısı yayınlar. | 1.0x | Yok |
+| **A2** | `ThermosphereAgent-02` | Jacchia-77/NRLMSISE-00 ile termosferik şişmeyi ve uydunun boylamsal sürüklenme sapmasını (along-track drift) hesaplar. | 1.0x | Yok |
+| **A3** | `RiskAssessmentAgent-03` | Gerçek zamanlı A-DRI skorunu, B-Düzlemi kovaryans elipsoidlerini ve $P_c$ çarpışma olasılığını belirler. | 1.5x | Yok |
+| **A4** | `AstrodynamicsAgent-04` | Vis-Viva mikro-fazlama manevralarını, teğetsel itki vektörlerini ve minimum yakıtlı kaçınma yörüngesini sentezler. | 1.5x | Yok |
+| **A5** | `EdgeInferenceAgent-05` | Radyasyon dayanımlı uçuş çipinde (ARM Cortex-R5F / Xilinx RT-Kintex) <150 µs PINN çıkarımı yapar ve TMR çoğunluk oylaması ile SEU bit-flip hatalarını maskeler. | 1.2x | Yok |
+| **A6** | `ConstellationConsensusAgent-06` | Uydular arası lazer/radyo veri bağlarını (ISL) yönetir; planlanan manevranın komşu takımyıldız yuvalarında (Walker-Delta) ikincil çarpışma zinciri yaratmayacağını teyit eder. | 1.0x | Yok |
+| **A7** | `ComplianceWatchdogAgent-07` | **Bağımsız Denetçi:** Manevranın NASA-STD-8719.14B, IADC ve ISO 24113 kurallarına uygunluğunu, en az 2.0 kg pasivasyon yakıt rezervinin korunduğunu denetler. | **2.0x** | **🚨 MUTLAK VETO** |
+| **A8** | `ReentryDisposalAgent-08` | Görev sonu (EOL) deorbit süresini izler; acil durumda Güney Pasifik Okyanusu İkametsiz Alanı'na (Point Nemo - SPOUA) kontrollü düşüş için $\Delta v$ bütçesini rezerve eder. | 1.0x | Yok |
+| **A9** | `MissionCommanderAgent-09` | 8 uzmandan gelen oyları Bizans Hata Toleranslı (BFT) konsensüs protokolü ile toplar; en az %70 ağırlıklı onay sağlandığında SHA-256 dijital imzalı otonom manevra emrini (`EXECUTE_AUTONOMOUS_MANEUVER`) yayınlar. | 1.0x | Nihai Karar |
+
+---
+
 
 ## ⚡ Temel İnovasyonlar & Bilimsel Derinlik
 
@@ -203,6 +253,10 @@ streamlit run app.py
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ [Sekme 8: 🌐 Canlı CelesTrak TLE Sorgulama Motoru]                           │
 │  NORAD ID ile CelesTrak ve Space-Track üzerinden canlı TLE verisi çeker.      │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Sekme 9: 🤖 9-Ajanlı Otonom Sürü Zekası (Autonomous Swarm)]                 │
+│  9 uçuş ajanının eşzamanlı kararları, BFT oylama defteri, canlı kara tahta    │
+│  ve SHA-256 kriptografik imzalı otonom manevra yetkilendirmesi.               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -217,11 +271,13 @@ Komut satırı aracı, terminal ortamında tam teşekküllü görev operasyonlar
 | `status` | Sistem durumu ve uzay havası telemetrisi | `python -m aegis_leo.cli status` |
 | `eval` | Birleşik A-DRI risk puanını hesaplar | `python -m aegis_leo.cli eval --sat STARLINK_LEO --miss 0.45 --kp 8.0` |
 | `burn` | Otonom kaçınma ateşlemesini planlar | `python -m aegis_leo.cli burn --sat STARLINK_LEO --miss 0.45` |
+| `swarm` | **9-Ajanlı Otonom Sürü Zekası Konsensüs Döngüsü** | `python -m aegis_leo.cli swarm --sat STARLINK_LEO --kp 7.8 --miss 0.082` |
 | `monte-carlo` | Monte Carlo kovaryans dağılımı simülasyonu | `python -m aegis_leo.cli monte-carlo --miss 0.45 --trials 1000` |
 | `breakup` | NASA standart parçalanma kaskad modeli | `python -m aegis_leo.cli breakup --target-mass 260.0 --proj-mass 5.0` |
 | `deorbit` | Point Nemo hedefli kontrollü deorbit analizi | `python -m aegis_leo.cli deorbit --alt 550.0 --mass 260.0` |
 | `rad-test` | SAA/SPE radyasyon & TMR hata toleransı testi | `python -m aegis_leo.cli rad-test --alt 550.0 --flips 4` |
 | `celestrak` | CelesTrak'ten canlı TLE yörünge elemanı çeker | `python -m aegis_leo.cli celestrak --norad 25544` |
+
 
 ---
 
@@ -245,8 +301,11 @@ uvicorn backend.main:app --reload --port 8000
 - `GET  /api/atmosphere/compare-models`: Çok modelli termosfer yoğunluk analizi.
 - `GET  /api/ground-track/calculate`: 2D yer izdüşümü ve blackout analizi.
 - `POST /api/compliance/audit`: NASA-STD-8719.14 denetimi ve ODAR raporu.
+- `GET  /api/swarm/status`: 9 otonom uçuş ajanının anlık sağlık ve telemetri durumu.
+- `POST /api/swarm/consensus-cycle`: Uçtan uca 9-ajanlı otonom konsensüs ve ateşleme döngüsü.
 
 ---
+
 
 ## 📋 NASA-STD-8719.14 Uyumluluk Matrisi
 
@@ -281,12 +340,14 @@ AEGIS-LEO, **NASA-STD-8719.14** (*Process for Limiting Orbital Debris*) gereksin
 
 ## 🧪 Doğrulama & Test Paketi
 
-Depo, 36 adet birim ve entegrasyon testinden oluşan kapsamlı bir test paketi içerir:
+Depo, 53 adet birim ve entegrasyon testinden oluşan kapsamlı bir test paketi içerir:
 ```bash
 pytest -v
 ```
 
 ```text
+tests/test_advanced_features.py ............... [PASSED]
+tests/test_agents_swarm.py .................... [PASSED] (11/11 Ajan & Orkestratör Testi)
 tests/test_ai_edge.py ......................... [PASSED]
 tests/test_api.py ............................. [PASSED]
 tests/test_compliance.py ...................... [PASSED]
@@ -296,8 +357,9 @@ tests/test_pareto.py .......................... [PASSED]
 tests/test_physics.py ......................... [PASSED]
 tests/test_risk.py ............................ [PASSED]
 tests/test_screening.py ....................... [PASSED]
-======================== 36 passed in 4.75s ========================
+======================== 53 passed in 11.44s ========================
 ```
+
 
 ---
 

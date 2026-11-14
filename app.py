@@ -37,7 +37,9 @@ from aegis_leo.data.celestrak_live import CelesTrakClient
 from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
 from aegis_leo.risk.covariance_visualizer import generate_covariance_ellipsoid_mesh
+from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
 import torch
+
 from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
 
 # ------------------ Streamlit Sayfa Yapılandırması ------------------ #
@@ -203,7 +205,7 @@ risk_data = adri_calc.evaluate_risk(
 st.title("🛡️ AEGIS-LEO: Otonom Yörünge Güvenlik Kalkanı")
 st.markdown("**Autonomous Edge-AI & Physics-Informed Orbital Safety Shield &bull; NASA Space Apps Challenge 2026**")
 
-tab_sim, tab_fleet, tab_pareto, tab_ground, tab_atmos, tab_rad, tab_deorbit, tab_celestrak = st.tabs([
+tab_sim, tab_fleet, tab_pareto, tab_ground, tab_atmos, tab_rad, tab_deorbit, tab_celestrak, tab_swarm = st.tabs([
     "🌍 1. 3D Yörünge & Kaçınma",
     "🛰️ 2. Takımyıldız & Filo Taraması",
     "⚖️ 3. Pareto Manevra Frontier",
@@ -212,7 +214,9 @@ tab_sim, tab_fleet, tab_pareto, tab_ground, tab_atmos, tab_rad, tab_deorbit, tab
     "☢️ 6. Radyasyon & TMR Hata Toleransı",
     "🎯 7. Deorbit & Point Nemo Koridoru",
     "🌐 8. Canlı CelesTrak TLE Sorgulama",
+    "🤖 9. 9-Ajanlı Sürü Zekası (Autonomous Swarm)",
 ])
+
 
 
 # ==========================================
@@ -701,3 +705,144 @@ with tab_celestrak:
 
         st.success(f"Uydu: **{tle_res['name']}** (Durum: `{tle_res['status']}` | Kaynak: `{tle_res['source']}`)")
         st.code(f"{tle_res['line1']}\n{tle_res['line2']}", language="text")
+
+
+# ==========================================
+# SEKME 9: 9-AJANLI OTONOM SÜRÜ ZEKASI (AUTONOMOUS SWARM)
+# ==========================================
+with tab_swarm:
+    st.subheader("🤖 AEGIS-LEO 9-Ajanlı Otonom Sürü Zekası & Dağıtık Görev Kontrolü")
+    st.caption(
+        "Güneş fırtınaları ve iletişim kesintilerinde (blackout) yer istasyonuna bağımlı kalmadan "
+        "9 uzman uç nokta ajanı tarafından yürütülen otonom algılama, risk tespiti, takımyıldız eşgüdümü ve konsensüs oylaması."
+    )
+
+    if "swarm_orchestrator" not in st.session_state:
+        st.session_state.swarm_orchestrator = OrbitalSwarmOrchestrator()
+    if "latest_swarm_cycle" not in st.session_state:
+        st.session_state.latest_swarm_cycle = st.session_state.swarm_orchestrator.run_consensus_cycle()
+
+    orch = st.session_state.swarm_orchestrator
+
+    sw_col1, sw_col2, sw_col3, sw_col4 = st.columns(4)
+    with sw_col1:
+        sw_kp = st.slider("Simüle Edilen Kp Endeksi:", 1.0, 9.0, 7.8, step=0.1)
+    with sw_col2:
+        sw_f107 = st.slider("Güneş Akısı F10.7 (SFU):", 70.0, 350.0, 255.0, step=5.0)
+    with sw_col3:
+        sw_miss = st.slider("Yaklaşma Mesafesi (m):", 10.0, 1000.0, 82.0, step=10.0)
+    with sw_col4:
+        sw_fuel = st.slider("Kalan Yakıt (kg):", 1.0, 25.0, 18.5, step=0.5)
+
+    if st.button("⚡ 9-Ajanlı Otonom Konsensüs Döngüsünü Tetikle", type="primary", use_container_width=True):
+        custom_telemetry = {
+            "satellite_id": satellite["name"],
+            "altitude_km": satellite["altitude_km"],
+            "inclination_deg": satellite["inclination_deg"],
+            "miss_distance_km": sw_miss / 1000.0,
+            "relative_speed_km_s": 11.2,
+            "tca_hours": 3.4,
+            "fuel_remaining_kg": sw_fuel,
+            "kp": sw_kp,
+            "f10_7": sw_f107,
+        }
+        st.session_state.latest_swarm_cycle = orch.run_consensus_cycle(custom_telemetry)
+        st.rerun()
+
+    cycle = st.session_state.latest_swarm_cycle
+    cmd = cycle["commander_directive"]
+
+    # Commander Verdict Banner
+    is_approved = cmd["consensus_reached"]
+    banner_color = "#059669" if is_approved else "#e11d48"
+    st.markdown(f"""
+    <div style="background: rgba(15, 23, 42, 0.9); border: 2px solid {banner_color}; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 style="margin: 0; color: {banner_color};">🎖️ {cmd['directive']}</h3>
+                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.9rem;">{cmd['status']}</p>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-family: monospace; font-size: 1.3rem; color: #38bdf8; font-weight: bold;">%{cmd['approval_percentage']} ONAY</div>
+                <div style="font-family: monospace; font-size: 0.75rem; color: #64748b;">Kriptografik İmza: {cmd['authorization_signature']}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 9-Agent Roster Grid (3x3)
+    st.markdown("### 🛰️ 9 Uç Nokta Ajanı Canlı Durum Matrisi")
+    agent_cols = st.columns(3)
+
+    agent_meta = [
+        ("A1_solar", "☀️ A1: Güneş Fırtınası Ajanı", "Uzay Havası & CME İzleme", "#f59e0b"),
+        ("A2_thermosphere", "🌌 A2: Termosfer Dinamiği Ajanı", "Yoğunluk Şişmesi & Drift", "#06b6d4"),
+        ("A3_risk", "⚠️ A3: A-DRI Risk Değerlendirme", "B-Plane & Çarpışma Olasılığı", "#ef4444"),
+        ("A4_astrodynamics", "🚀 A4: Yörünge Astrodinamiği", "Vis-Viva Evasive Phasing", "#10b981"),
+        ("A5_edge_ai", "🧠 A5: Uç Nokta PINN & TMR", "Mikrosaniye Çıkarım & SEU", "#8b5cf6"),
+        ("A6_constellation", "🛰️ A6: Takımyıldız Eşgüdümü", "Walker-Delta ISL Mesh Ağı", "#3b82f6"),
+        ("A7_compliance", "🛡️ A7: Standart Denetim Ajanı", "NASA-STD-8719 & Veto Yetkisi", "#ec4899"),
+        ("A8_disposal", "🎯 A8: Atmosferik Bertaraf", "Point Nemo & EOL Deorbit", "#14b8a6"),
+        ("A9_commander", "🎖️ A9: Ana Görev Komutanı", "Bizans Konsensüsü & İcraat", "#6366f1"),
+    ]
+
+    for idx, (res_key, title, subtitle, color) in enumerate(agent_meta):
+        col_target = agent_cols[idx % 3]
+        agent_data = cycle["agent_results"].get(res_key, {})
+        status = agent_data.get("status", "ACTIVE")
+        decision = agent_data.get("decision", "Nominal")
+        status_bg = "#065f46" if status == "ACTIVE" else "#991b1b" if status in ["ALERT", "VETO"] else "#1e3a8a"
+
+        with col_target:
+            st.markdown(f"""
+            <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid {color}44; border-left: 4px solid {color}; border-radius: 8px; padding: 12px; margin-bottom: 12px; min-height: 140px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-weight: bold; color: {color}; font-size: 0.85rem;">{title}</div>
+                    <span style="background: {status_bg}; color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">{status}</span>
+                </div>
+                <div style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 6px;">{subtitle}</div>
+                <div style="font-size: 0.75rem; color: #e2e8f0; line-height: 1.3;">{decision}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Voting Ledger & Communication Blackboard
+    st.markdown("---")
+    ledger_col, blackboard_col = st.columns([1, 1])
+
+    with ledger_col:
+        st.markdown("#### 🗳️ Konsensüs Oylama Kayıt Defteri (Voting Ledger)")
+        for vote in cycle["swarm_votes"]:
+            v_agent = vote.get("agent", "")
+            v_vote = vote.get("vote", "")
+            v_conf = int(vote.get("confidence", 1.0) * 100)
+            v_reason = vote.get("reason", "Onaylandı")
+            v_badge_color = "#10b981" if v_vote in ["APPROVE", "OPTIMAL", "URGENT_APPROVAL"] else "#ef4444" if v_vote == "VETO" else "#f59e0b"
+
+            st.markdown(f"""
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 4px; background: rgba(30, 41, 59, 0.4); border-radius: 6px; font-size: 0.8rem;">
+                <div>
+                    <b>{v_agent}</b>: <span style="color: #94a3b8;">{v_reason}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.7rem; color: #64748b;">%{v_conf}</span>
+                    <span style="background: {v_badge_color}33; color: {v_badge_color}; border: 1px solid {v_badge_color}; padding: 1px 6px; border-radius: 4px; font-weight: bold; font-size: 0.7rem;">{v_vote}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with blackboard_col:
+        st.markdown("#### 📡 Ajanlar Arası İletişim Kara Tahtası (Blackboard Feed)")
+        recent_msgs = cycle.get("recent_messages", [])
+        if recent_msgs:
+            for msg in reversed(recent_msgs[-6:]):
+                st.markdown(f"""
+                <div style="padding: 6px 10px; margin-bottom: 4px; background: rgba(15, 23, 42, 0.6); border-left: 2px solid #38bdf8; border-radius: 4px; font-size: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; color: #38bdf8; font-family: monospace;">
+                        <span>{msg.get('sender')} ➔ {msg.get('recipient')} [{msg.get('message_type')}]</span>
+                        <span style="color: #64748b;">{msg.get('timestamp', '')[11:19]} UTC</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Kara tahtada henüz mesaj bulunmuyor.")
+

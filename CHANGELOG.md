@@ -5,6 +5,26 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-14
+
+### Added
+- **9-Agent Autonomous Swarm Intelligence (`aegis_leo/agents/`)**:
+  - `SolarStormAgent-01`: Space weather, CME speed, and Kp/F10.7 storm detection.
+  - `ThermosphereAgent-02`: Real-time atmospheric surge and along-track drift tracking.
+  - `RiskAssessmentAgent-03`: B-plane covariance projection and A-DRI calculation.
+  - `AstrodynamicsAgent-04`: Vis-Viva proactive micro-burn synthesis and fuel minimization.
+  - `EdgeInferenceAgent-05`: Sub-millisecond PINN inference with Triple Modular Redundancy (TMR) fault masking.
+  - `ConstellationConsensusAgent-06`: Walker-Delta inter-satellite link (ISL) mesh coordination and slot conflict avoidance.
+  - `ComplianceWatchdogAgent-07`: Independent watchdog enforcing NASA-STD-8719.14B, IADC guidelines, and passivation reserves with absolute VETO power.
+  - `ReentryDisposalAgent-08`: Controlled deorbit trajectory planning toward Point Nemo (SPOUA) and orbital decay monitoring.
+  - `MissionCommanderAgent-09`: Byzantine consensus evaluation, weighted voting ledger, and SHA-256 digital signature authorization.
+  - `OrbitalSwarmOrchestrator`: Asynchronous blackboard-based lifecycle coordinator for all 9 agents.
+- **Interactive Swarm Dashboard (`app.py` Tab 9)**: Real-time 3x3 agent matrix, live voting ledger, inter-agent communication feed, and cryptographic directive display.
+- **Swarm CLI & API Endpoints**:
+  - `aegis swarm` CLI subcommand with customizable satellite, miss distance, and space weather parameters.
+  - `GET /api/swarm/status` and `POST /api/swarm/consensus-cycle` in FastAPI backend.
+- **Unit & Integration Test Suite Expansion**: 11 new tests (`tests/test_agents_swarm.py` and `tests/test_api.py`), bringing the total test suite to 53 passing tests.
+
 ## [1.1.0] - 2026-11-14
 
 ### Added
