@@ -6,8 +6,12 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg?logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-30%2F30%20Geçti-brightgreen.svg)]()
+[![Testler](https://img.shields.io/badge/Testler-36%2F36%20Geçti-brightgreen.svg)]()
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<p align="center">
+  <img src="assets/aegis_leo_hero_banner.jpg" alt="AEGIS-LEO Görev Bannerı" width="100%" style="border-radius: 12px; box-shadow: 0 8px 24px rgba(6,182,212,0.25);" />
+</p>
 
 > **"Uzay Havası Fiziği, Yörünge Mekaniği ve Otonom Uç Nokta Yapay Zekasını Birleştirerek Alçak Dünya Yörüngesini (LEO) Koruyoruz."**
 
@@ -25,6 +29,10 @@
 
 $$a_{drag} = -\frac{1}{2} \rho(h, K_p, F_{10.7}) \left(\frac{C_d A}{m}\right) v_{rel}^2 \hat{v}_{rel}$$
 
+<p align="center">
+  <img src="assets/space_weather_thermosphere_drag.jpg" alt="Güneş Fırtınası Termosferik Genleşme Simülasyonu" width="100%" style="border-radius: 10px;" />
+</p>
+
 ### 2. Uyarlanabilir Enkaz ve Sürüklenme Risk İndeksi (A-DRI)
 Takip edilen her LEO uydusu ve uzay aracı için gerçek zamanlı hesaplanan birleşik risk metriği ($0.0 \to 1.0$):
 
@@ -35,11 +43,15 @@ $$\text{A-DRI} = w_1 C_{prob} + w_2 W_{drag} + w_3 D_{ord} + w_4 F_{\Delta v}$$
 * **$D_{ord}$ ($w_3 = 0.20$):** **NASA ORDEM 3.1** ve ESA MASTER modelleriyle kalibre edilmiş irtifa ve eğim uzay enkazı yoğunluk faktörü.
 * **$F_{\Delta v}$ ($w_4 = 0.15$):** Kalan yakıt bütçesi ve manevra maliyetini dengeleyen yakıt fizibilite katsayısı.
 
-### 3. Çok Amaçlı Pareto Manevra Frontier Optimizasyonu
-Çarpışmadan kaçınma tek bir çözümden ibaret değildir; operatör için çok boyutlu ödünleşim (trade-off) analizi sunar:
+### 3. Çok Amaçlı Pareto Manevra Frontier Optimizasyonu & Uç Nokta Yapay Zekası
+Çarpışmadan kaçınma tek bir çözümden ibaret değildir; operatör ve otonom uçuş bilgisayarı için çok boyutlu ödünleşim (trade-off) analizi sunar:
 * **Minimum Yakıt Çözümü (Proaktif Mikro-Ateşleme):** Sadece $\Delta v \approx 0.325\text{ m/s}$ ile %88 yakıt tasarrufu.
 * **Dengeli Pareto-Optimum Çözüm:** Yakıt maliyeti, karşılaşma mesafesi ve ikincil enkaz riski arasında optimum denge.
 * **Maksimum Güvenlik Ayrılması:** Konservatif derin kaçınma manevrası.
+
+<p align="center">
+  <img src="assets/autonomous_avoidance_hud.jpg" alt="Otonom Kaçınma ve Uç Nokta Yapay Zeka HUD Arayüzü" width="100%" style="border-radius: 10px;" />
+</p>
 
 ### 4. Takımyıldız & Filo Taraması (Walker Delta)
 * Walker Delta geometrisindeki operasyonel takımyıldız filolarını (Starlink, OneWeb benzeri 24-72 uydu) yüzlerce enkaz parçasına karşı mekânsal filtreleme ile saniyeler içinde tarar.
@@ -110,12 +122,16 @@ uvicorn backend.main:app --reload --port 8000
 * **Web HUD:** [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
 * **API Dokümantasyonu:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 4. Terminal Simülasyonu
+### 4. Profesyonel Aegis CLI Araçları
 ```bash
-python demo_script.py
+python -m aegis_leo.cli status                                      # Sistem & uzay havası telemetrisi
+python -m aegis_leo.cli eval --sat STARLINK_LEO --miss 0.45 --kp 8  # A-DRI risk değerlendirmesi
+python -m aegis_leo.cli burn --sat STARLINK_LEO --miss 0.45        # Otonom kaçınma ateşlemesi hesabı
+python -m aegis_leo.cli monte-carlo --miss 0.45 --trials 1000      # Monte Carlo kovaryans dağılımı
+python -m aegis_leo.cli breakup --target-mass 260.0 --proj-mass 5   # NASA standart parçalanma analizi
 ```
 
-### 5. Genişletilmiş Test Paketi (30 Test)
+### 5. Genişletilmiş Test Paketi (36 Test)
 ```bash
 pytest -v
 ```
