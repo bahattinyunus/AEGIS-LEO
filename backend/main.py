@@ -647,9 +647,12 @@ def serve_dashboard():
                     <div class="flex justify-between"><span class="text-slate-400">Yakıt Fizibilitesi (F_Δv):</span><span id="fdelta-val" class="font-mono">0.08</span></div>
                 </div>
 
-                <div class="pt-3 border-t border-slate-800">
+                <div class="pt-3 border-t border-slate-800 space-y-2">
                     <button id="btn-evasion" onclick="executeAutonomousEvasion()" class="w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-900/50 transition">
                         ⚡ Otonom Δv Kaçınmasını Hesapla
+                    </button>
+                    <button id="btn-swarm" onclick="triggerSwarmConsensus()" class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-900/50 transition">
+                        🤖 9-Ajanlı Sürü Konsensüsünü Tetikle
                     </button>
                     <div id="evasion-result" class="hidden mt-3 p-3 bg-slate-900/90 rounded border border-cyan-800 text-[11px] space-y-1">
                         <div class="text-cyan-400 font-semibold">Otonom Ateşleme Planlandı:</div>
@@ -657,7 +660,16 @@ def serve_dashboard():
                         <div>Harcanan Yakıt: <span id="res-fuel" class="text-slate-300 font-mono">0.088 kg</span> (Tasarruf: <span id="res-saved" class="text-emerald-300 font-bold">%28</span>)</div>
                         <div>Yeni A-DRI: <span id="res-post" class="text-emerald-400 font-mono font-bold">0.29 (Nominal)</span></div>
                     </div>
+                    <div id="swarm-result" class="hidden mt-3 p-3 bg-slate-900/90 rounded border border-indigo-700 text-[11px] space-y-1">
+                        <div class="text-indigo-400 font-semibold flex justify-between">
+                            <span>Sürü Kararı: <b id="sw-directive">EXECUTE</b></span>
+                            <span id="sw-ratio" class="text-emerald-400 font-mono">%100 Onay</span>
+                        </div>
+                        <div class="text-slate-400">İmza: <span id="sw-sig" class="font-mono text-cyan-300">AEGIS-SIG</span></div>
+                        <div id="sw-votes" class="pt-1 text-[10px] space-y-0.5 max-h-24 overflow-y-auto"></div>
+                    </div>
                 </div>
+
             </div>
         </main>
 
@@ -870,6 +882,44 @@ def serve_dashboard():
             document.getElementById('miss-dist').innerText = `${data.proactive_burn.resulting_separation_km} km (SAFE)`;
             document.getElementById('miss-dist').className = "text-emerald-400 font-bold";
         }
+
+        async function triggerSwarmConsensus() {
+            const btn = document.getElementById('btn-swarm');
+            btn.innerText = "9 Ajan Oyluyor...";
+
+            const res = await fetch('/api/swarm/consensus-cycle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    satellite_id: "STARLINK_LEO",
+                    altitude_km: 450.0,
+                    inclination_deg: 53.0,
+                    miss_distance_km: currentStorm === 'QUIET' ? 0.45 : 0.082,
+                    relative_speed_km_s: 11.2,
+                    tca_hours: 3.4,
+                    fuel_remaining_kg: 18.2,
+                    kp: currentStorm === 'QUIET' ? 1.3 : 8.0,
+                    f10_7: currentStorm === 'QUIET' ? 72.0 : 265.0,
+                })
+            });
+            const data = await res.json();
+
+            btn.innerText = "🤖 Sürü Konsensüsü Tamamlandı";
+            const swBox = document.getElementById('swarm-result');
+            swBox.classList.remove('hidden');
+
+            const cmd = data.commander_directive;
+            document.getElementById('sw-directive').innerText = cmd.directive;
+            document.getElementById('sw-directive').className = cmd.consensus_reached ? "text-emerald-400 font-bold" : "text-rose-400 font-bold";
+            document.getElementById('sw-ratio').innerText = `%${cmd.approval_percentage} Onay`;
+            document.getElementById('sw-sig').innerText = cmd.authorization_signature;
+
+            const votesList = document.getElementById('sw-votes');
+            votesList.innerHTML = data.swarm_votes.map(v => 
+                `<div class="flex justify-between text-slate-300"><span>${v.agent}:</span><span class="${v.vote === 'APPROVE' ? 'text-emerald-400' : 'text-amber-400'}">${v.vote}</span></div>`
+            ).join('');
+        }
+
     </script>
 </body>
 </html>
