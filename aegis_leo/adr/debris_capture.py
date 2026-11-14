@@ -13,7 +13,7 @@ Standard reference models: WGS84, Earth Magnetic Dipole, NASA-STD-8719.14 ADR st
 Uses exclusively NumPy and Python Standard Library.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from typing import List, Tuple, Dict, Any, Optional
 import math
 import numpy as np
@@ -165,6 +165,23 @@ class InverseKinematicsResult:
     orientation_error: float          # Residual angular orientation error in radians
     manipulability: float             # Yoshikawa manipulability index at the solution
     message: str
+
+    def __getitem__(self, item: str) -> Any:
+        mapping = {
+            "manipulability_index": self.manipulability,
+            "joint_angles_rad": self.joint_angles,
+        }
+        if item in mapping:
+            return mapping[item]
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
 
 
 class RoboticArm6DOF:
@@ -883,6 +900,11 @@ class SpacecraftMassProperties:
     com_offset_m: np.ndarray             # CoM position vector in reference frame (3,)
     inertia_tensor_kg_m2: np.ndarray     # 3x3 inertia matrix about its own CoM
     initial_spin_rate_rad_s: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    initial_angular_velocity_rad_s: InitVar[Optional[np.ndarray]] = None
+
+    def __post_init__(self, initial_angular_velocity_rad_s: Optional[np.ndarray] = None):
+        if initial_angular_velocity_rad_s is not None:
+            self.initial_spin_rate_rad_s = np.asarray(initial_angular_velocity_rad_s, dtype=float)
 
 
 class ReactionWheelArray:
@@ -1136,16 +1158,21 @@ class PostCaptureMomentumManager:
         self,
         rw_array: Optional[ReactionWheelArray] = None,
         mtq_array: Optional[MagnetorquerArray] = None,
-        b_field_model: Optional[EarthMagneticFieldDipole] = None
+        b_field_model: Optional[EarthMagneticFieldDipole] = None,
+        chaser_mass_kg: float = 450.0,
+        debris_mass_kg: float = 1200.0,
+        **kwargs,
     ):
         self.rw = rw_array if rw_array is not None else ReactionWheelArray()
         self.mtq = mtq_array if mtq_array is not None else MagnetorquerArray()
         self.b_field_model = b_field_model if b_field_model is not None else EarthMagneticFieldDipole()
+        self.chaser_mass_kg = float(chaser_mass_kg)
+        self.debris_mass_kg = float(debris_mass_kg)
 
     def simulate_detumble(
         self,
-        chaser: SpacecraftMassProperties,
-        debris: SpacecraftMassProperties,
+        chaser: Optional[SpacecraftMassProperties] = None,
+        debris: Optional[SpacecraftMassProperties] = None,
         docking_offset_m: np.ndarray = np.array([0.0, 0.0, 3.0]),
         orbit_altitude_km: float = 700.0,
         orbit_inclination_deg: float = 82.0,
@@ -1154,12 +1181,31 @@ class PostCaptureMomentumManager:
         control_mode: str = "hybrid",  # "hybrid", "b_dot", "reaction_wheels_only", "uncontrolled"
         detumble_threshold_rad_s: float = 0.002,
         kd_gain: float = 25.0,
-        kw_gain: float = 0.08
+        kw_gain: float = 0.08,
+        initial_omega_deg_s: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
         """
         Simulate detumbling of captured spinning rocket upper stage over an orbit.
         Integrates full 3-DOF rigid body rotational dynamics and quaternion kinematics.
         """
+        if chaser is None:
+            chaser = SpacecraftMassProperties(
+                mass_kg=self.chaser_mass_kg,
+                inertia_tensor_kg_m2=np.diag([300.0, 350.0, 400.0]),
+                com_offset_m=np.zeros(3),
+                initial_angular_velocity_rad_s=np.zeros(3),
+            )
+        if debris is None:
+            if initial_omega_deg_s is not None:
+                omega_rad_s = np.radians(np.asarray(initial_omega_deg_s, dtype=float))
+            else:
+                omega_rad_s = np.radians(np.array([10.0, 5.0, -8.0]))
+            debris = SpacecraftMassProperties(
+                mass_kg=self.debris_mass_kg,
+                inertia_tensor_kg_m2=np.diag([1200.0, 1500.0, 800.0]),
+                com_offset_m=np.zeros(3),
+                initial_angular_velocity_rad_s=omega_rad_s,
+            )
         combined = CombinedBodyDynamics.compute_combined_properties(chaser, debris, docking_offset_m)
         I_comb = combined["combined_inertia_kg_m2"]
         I_inv = np.linalg.inv(I_comb)
@@ -1298,6 +1344,7 @@ class PostCaptureMomentumManager:
             "time_s": time_arr,
             "omega_norm_rad_s": omega_arr,
             "omega_norm_deg_s": np.degrees(omega_arr),
+            "omega_magnitude_deg_s": np.degrees(omega_arr),
             "rotational_energy_j": energy_arr,
             "wheel_momentum_nms": np.array(wheel_momentum_hist),
             "rw_torque_nm": np.array(rw_torque_hist),

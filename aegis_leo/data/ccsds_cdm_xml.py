@@ -1533,24 +1533,43 @@ def validate_cdm_kvn(kvn_content: str) -> ValidationResult:
 # ---------------------------------------------------------------------------
 
 def create_cdm_message(
-    primary_sat_id: str,
-    primary_sat_name: str,
-    secondary_obj_id: str,
-    secondary_obj_name: str,
-    miss_distance_m: float,
-    relative_speed_m_s: float,
-    collision_prob: float,
-    tca: datetime,
+    primary_sat_id: str = "SAT-01",
+    primary_sat_name: str = "AEGIS-SAT-1",
+    secondary_obj_id: str = "DEB-99",
+    secondary_obj_name: str = "COSMOS-1408 DEB",
+    miss_distance_m: float = 82.0,
+    relative_speed_m_s: float = 12500.0,
+    collision_prob: float = 1.2e-4,
+    tca: Optional[Union[datetime, str]] = None,
     primary_state: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     secondary_state: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     primary_cov_rtn_m2: Optional[Union[np.ndarray, Dict[str, float]]] = None,
     secondary_cov_rtn_m2: Optional[Union[np.ndarray, Dict[str, float]]] = None,
     screening_volume_m: Optional[Tuple[float, float, float]] = (5000.0, 25000.0, 5000.0),
     originator: str = "AEGIS-LEO SSA SHIELD",
+    sat_name: Optional[str] = None,
+    debris_name: Optional[str] = None,
+    tca_utc: Optional[str] = None,
 ) -> CDMMessage:
     """
     Convenience factory to construct a fully populated CDMMessage.
     """
+    if sat_name is not None:
+        primary_sat_name = sat_name
+    if debris_name is not None:
+        secondary_obj_name = debris_name
+    if tca_utc is not None:
+        try:
+            tca = datetime.fromisoformat(tca_utc.replace("Z", "+00:00"))
+        except Exception:
+            tca = datetime.now(timezone.utc)
+    elif tca is None:
+        tca = datetime.now(timezone.utc)
+    elif isinstance(tca, str):
+        try:
+            tca = datetime.fromisoformat(tca.replace("Z", "+00:00"))
+        except Exception:
+            tca = datetime.now(timezone.utc)
     header = CDMHeader(
         ccsds_cdm_vers="1.0",
         creation_date=datetime.now(timezone.utc),

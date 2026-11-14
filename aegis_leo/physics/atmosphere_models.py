@@ -153,4 +153,7 @@ def compare_atmospheric_models(
         "kp_index": kp,
         "f10_7_flux": f10_7,
         "comparison_table": results,
+        "jacchia_77": [r["jacchia_77_kg_m3"] for r in results],
+        "nrlmsise_00": [r["nrlmsise_00_kg_m3"] for r in results],
+        "exponential": [r["exponential_kg_m3"] for r in results],
     }

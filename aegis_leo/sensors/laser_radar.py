@@ -261,15 +261,17 @@ def compute_radar_snr(
     peak_power_w: float,
     tx_gain_dbi: float,
     rx_gain_dbi: float,
-    wavelength_m: float,
-    rcs_m2: Union[float, np.ndarray],
-    range_m: Union[float, np.ndarray],
+    wavelength_m: Optional[float] = None,
+    rcs_m2: Union[float, np.ndarray] = 1.0,
+    range_m: Union[float, np.ndarray] = 10000.0,
     noise_temp_k: float = STANDARD_TEMP_K,
     noise_figure_db: float = 3.0,
     bandwidth_hz: float = 1e6,
     system_loss_db: float = 0.0,
     num_pulses: int = 1,
     coherent: bool = True,
+    frequency_hz: Optional[float] = None,
+    pulse_width_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Calculate single-pulse and integrated Signal-to-Noise Ratio (SNR) for Spaceborne Radar.
@@ -290,15 +292,15 @@ def compute_radar_snr(
                   If False, uses non-coherent (square-law / Peebles) integration.
 
     Returns:
-        Dictionary with:
-            received_power_w: Received peak power P_r (Watts).
-            noise_power_w: Thermal noise power P_n = k_B * T_sys * B (Watts).
-            snr_linear: Single-pulse SNR (linear).
-            snr_db: Single-pulse SNR in dB.
-            integrated_snr_linear: Integrated SNR across N pulses.
-            integrated_snr_db: Integrated SNR in dB.
-            noise_temp_sys_k: Effective system noise temperature (Kelvin).
+        Dictionary with SNR metrics:
+            received_power_w, noise_power_w, snr_linear, snr_db,
+            integrated_snr_linear, integrated_snr_db, noise_temp_sys_k.
     """
+    if wavelength_m is None:
+        if frequency_hz is not None:
+            wavelength_m = SPEED_OF_LIGHT / frequency_hz
+        else:
+            wavelength_m = SPEED_OF_LIGHT / 10.0e9
     pr = radar_range_equation(
         peak_power_w=peak_power_w,
         tx_gain_dbi=tx_gain_dbi,
@@ -1219,8 +1221,58 @@ class SpaceborneRadar:
     Active Spaceborne Tracking Radar emulation engine for orbital conjunctions.
     """
 
-    def __init__(self, config: Optional[SpaceborneRadarConfig] = None):
-        self.config = config or SpaceborneRadarConfig()
+    def __init__(
+        self,
+        config: Optional[SpaceborneRadarConfig] = None,
+        pt_watts: Optional[float] = None,
+        freq_hz: Optional[float] = None,
+        antenna_gain_dbi: Optional[float] = None,
+        **kwargs,
+    ):
+        if config is None:
+            config = SpaceborneRadarConfig(
+                frequency_hz=freq_hz if freq_hz is not None else 10.0e9,
+                peak_power_w=pt_watts if pt_watts is not None else 1500.0,
+                tx_gain_dbi=antenna_gain_dbi if antenna_gain_dbi is not None else 42.0,
+                rx_gain_dbi=antenna_gain_dbi if antenna_gain_dbi is not None else 42.0,
+            )
+        self.config = config
+
+    def compute_snr_db(self, range_km: float, rcs_m2: float) -> float:
+        """Compute integrated SNR in dB for given target distance in km and RCS in m^2."""
+        res = compute_radar_snr(
+            peak_power_w=self.config.peak_power_w,
+            tx_gain_dbi=self.config.tx_gain_dbi,
+            rx_gain_dbi=self.config.rx_gain_dbi,
+            wavelength_m=self.config.wavelength_m,
+            rcs_m2=rcs_m2,
+            range_m=range_km * 1000.0,
+            bandwidth_hz=self.config.chirp_bandwidth_hz,
+            noise_temp_k=self.config.noise_temp_k,
+            noise_figure_db=self.config.noise_figure_db,
+            system_loss_db=self.config.system_loss_db,
+            num_pulses=self.config.num_integrated_pulses,
+            coherent=self.config.coherent_integration,
+        )
+        return float(res.get("integrated_snr_db", res.get("snr_db", 0.0)))
+
+    def calculate_pd(
+        self,
+        snr_linear: float,
+        pfa: float = 1e-6,
+        model: Union[str, SwerlingModel] = "SWERLING_1",
+    ) -> float:
+        """Calculate probability of detection given linear SNR, Pfa, and Swerling model."""
+        if isinstance(model, str):
+            mapping = {
+                "SWERLING_0": SwerlingModel.SWERLING_0,
+                "SWERLING_1": SwerlingModel.SWERLING_I,
+                "SWERLING_2": SwerlingModel.SWERLING_II,
+                "SWERLING_3": SwerlingModel.SWERLING_III,
+                "SWERLING_4": SwerlingModel.SWERLING_IV,
+            }
+            model = mapping.get(model.upper(), SwerlingModel.SWERLING_I)
+        return float(calculate_pd(snr_linear=snr_linear, pfa=pfa, model=model, num_pulses=self.config.num_integrated_pulses))
 
     def observe(
         self,
@@ -1492,32 +1544,42 @@ class SpaceborneLidar:
 
 def generate_range_doppler_map(
     targets: List[Dict[str, float]],
-    radar_config: SpaceborneRadarConfig,
-    range_bins_m: np.ndarray,
-    velocity_bins_m_s: np.ndarray,
+    radar_config: Optional[SpaceborneRadarConfig] = None,
+    range_bins_m: Optional[np.ndarray] = None,
+    velocity_bins_m_s: Optional[np.ndarray] = None,
     noise_floor_w: float = 1e-13,
     rng: Optional[np.random.Generator] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Synthesize a 2D Range-Doppler radar power matrix (shape [len(range_bins), len(velocity_bins)])
-    with complex thermal noise and multiple orbital target returns.
-
-    Parameters:
-        targets: List of dicts, each with keys:
-                 - "range_m": Target distance (meters).
-                 - "velocity_m_s": Target radial range-rate (m/s).
-                 - "rcs_m2": Target RCS (m^2).
-        radar_config: Radar parameters.
-        range_bins_m: 1D array of range bin centers (m).
-        velocity_bins_m_s: 1D array of velocity bin centers (m/s).
-        noise_floor_w: Baseline thermal noise power in Watts.
-        rng: Random number generator.
-
-    Returns:
-        (power_map_watts, range_bins_m, velocity_bins_m_s)
+    Synthesize a 2D Range-Doppler radar power matrix with complex thermal noise and multiple orbital target returns.
     """
+    if radar_config is None:
+        radar_config = SpaceborneRadarConfig()
     if rng is None:
         rng = np.random.default_rng()
+
+    return_km = False
+    norm_targets = []
+    max_r_km = 30.0
+    for tgt in targets:
+        r_m = tgt.get("range_m", tgt.get("range_km", 15.0) * (1.0 if "range_m" in tgt else 1000.0))
+        v_m_s = tgt.get("velocity_m_s", tgt.get("relative_speed_km_s", 0.0) * (1.0 if "velocity_m_s" in tgt else 1000.0))
+        rcs = tgt.get("rcs_m2", 1.0)
+        norm_targets.append({"range_m": r_m, "velocity_m_s": v_m_s, "rcs_m2": rcs})
+        max_r_km = max(max_r_km, (r_m / 1000.0) * 1.5)
+
+    if range_bins_m is None:
+        range_bins_km = np.linspace(0.0, max(30.0, max_r_km), 64)
+        range_bins_m = range_bins_km * 1000.0
+        return_km = True
+    else:
+        range_bins_km = range_bins_m / 1000.0
+
+    if velocity_bins_m_s is None:
+        velocity_bins_km_s = np.linspace(-5.0, 5.0, 64)
+        velocity_bins_m_s = velocity_bins_km_s * 1000.0
+    else:
+        velocity_bins_km_s = velocity_bins_m_s / 1000.0
 
     nr = len(range_bins_m)
     nv = len(velocity_bins_m_s)
@@ -1535,7 +1597,7 @@ def generate_range_doppler_map(
 
     r_grid, v_grid = np.meshgrid(range_bins_m, velocity_bins_m_s, indexing="ij")
 
-    for tgt in targets:
+    for tgt in norm_targets:
         r_t = tgt["range_m"]
         v_t = tgt["velocity_m_s"]
         rcs_t = tgt["rcs_m2"]
@@ -1562,4 +1624,6 @@ def generate_range_doppler_map(
         signal_complex += amplitude * psf * np.exp(1j * phase)
 
     power_map = np.abs(signal_complex) ** 2
+    if return_km:
+        return power_map, range_bins_km, velocity_bins_km_s
     return power_map, range_bins_m, velocity_bins_m_s

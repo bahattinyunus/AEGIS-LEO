@@ -70,6 +70,14 @@ class PointNemo:
     )
 
 
+POINT_NEMO = {
+    "name": PointNemo.NAME,
+    "latitude_deg": PointNemo.LATITUDE_DEG,
+    "longitude_deg": PointNemo.LONGITUDE_DEG,
+}
+
+
+
 # =============================================================================
 # Data Structures
 # =============================================================================
@@ -211,6 +219,50 @@ class ReentryFootprintResult:
             "sample_impact_count": len(self.sample_impact_points),
             "simulation_duration_ms": round(self.simulation_duration_ms, 2),
         }
+
+    @property
+    def casualty_expectation_ec(self) -> float:
+        return float(self.casualty_risk.casualty_expectation_ec)
+
+    @property
+    def semi_major_3sigma_km(self) -> float:
+        if "3sigma" in self.ellipses:
+            return float(self.ellipses["3sigma"].semi_major_km)
+        return float(self.std_downrange_km * 3.0)
+
+    @property
+    def semi_minor_3sigma_km(self) -> float:
+        if "3sigma" in self.ellipses:
+            return float(self.ellipses["3sigma"].semi_minor_km)
+        return float(self.std_crossrange_km * 3.0)
+
+    @property
+    def impact_points(self) -> List[List[float]]:
+        pts = []
+        for p in self.sample_impact_points:
+            lat = p.get("latitude_deg", p.get("lat", PointNemo.LATITUDE_DEG))
+            lon = p.get("longitude_deg", p.get("lon", PointNemo.LONGITUDE_DEG))
+            pts.append([lat, lon])
+        return pts
+
+    def __getitem__(self, item: str) -> Any:
+        if item == "casualty_expectation_ec":
+            return self.casualty_expectation_ec
+        if item == "semi_major_3sigma_km":
+            return self.semi_major_3sigma_km
+        if item == "semi_minor_3sigma_km":
+            return self.semi_minor_3sigma_km
+        if item == "impact_points":
+            return self.impact_points
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
 
     def to_geojson(self) -> Dict[str, Any]:
         """Convert result to standard GeoJSON FeatureCollection."""
@@ -681,6 +733,8 @@ def simulate_reentry_monte_carlo(
     sigma_density_pct: float = 12.0,
     sigma_bc_pct: float = 15.0,
     sigma_cross_velocity_m_s: float = 8.0,
+    nominal_target: Optional[Dict[str, float]] = None,
+    num_runs: Optional[int] = None,
 ) -> ReentryFootprintResult:
     """
     Execute high-fidelity Monte Carlo atmospheric entry ground footprint simulation.
@@ -706,6 +760,11 @@ def simulate_reentry_monte_carlo(
         ReentryFootprintResult containing dispersion statistics, 1/2/3-sigma ellipses,
         casualty assessment, and GeoJSON capabilities.
     """
+    if nominal_target is not None:
+        aimpoint_lat = float(nominal_target.get("latitude_deg", nominal_target.get("lat", aimpoint_lat)))
+        aimpoint_lon = float(nominal_target.get("longitude_deg", nominal_target.get("lon", aimpoint_lon)))
+    if num_runs is not None:
+        num_trials = int(num_runs)
     t_start = time.perf_counter()
 
     rng = np.random.default_rng(seed)

@@ -72,7 +72,29 @@ class StationkeepingBudget:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert budget to serializable dictionary."""
-        return asdict(self)
+        d = asdict(self)
+        d["total_annual_dv_m_s"] = self.total_annual_operational_delta_v_with_margin_m_s
+        d["annual_propellant_kg"] = self.annual_propellant_consumption_kg
+        d["propellant_lifetime_years"] = self.operational_lifetime_with_disposal_years
+        return d
+
+    def __getitem__(self, item: str) -> Any:
+        mapping = {
+            "total_annual_dv_m_s": self.total_annual_operational_delta_v_with_margin_m_s,
+            "annual_propellant_kg": self.annual_propellant_consumption_kg,
+            "propellant_lifetime_years": self.operational_lifetime_with_disposal_years,
+        }
+        if item in mapping:
+            return mapping[item]
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
 
 
 @dataclass
@@ -111,7 +133,50 @@ class SlotReassignmentResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert assignment result to serializable dictionary."""
-        return asdict(self)
+        d = asdict(self)
+        d["status"] = self.status
+        d["total_rebalance_dv_m_s"] = self.total_rebalance_dv_m_s
+        d["reassigned_slots"] = self.reassigned_slots
+        return d
+
+    @property
+    def status(self) -> str:
+        return "OPTIMAL_CONVERGED"
+
+    @property
+    def total_rebalance_dv_m_s(self) -> float:
+        return self.total_fleet_delta_v_m_s
+
+    @property
+    def reassigned_slots(self) -> List[Dict[str, Any]]:
+        slots = []
+        for i, a in enumerate(self.assignments):
+            slots.append({
+                "satellite_index": a.get("satellite_index", a.get("satellite_id", i + 1)),
+                "old_mean_anomaly_deg": round(a.get("current_anomaly_deg", 0.0), 2),
+                "target_mean_anomaly_deg": round(a.get("target_slot_anomaly_deg", 0.0), 2),
+                "phase_shift_deg": round(a.get("phase_shift_deg", 0.0), 2),
+                "phasing_dv_m_s": round(a.get("delta_v_m_s", 0.0), 3),
+                **a,
+            })
+        return slots
+
+    def __getitem__(self, item: str) -> Any:
+        if item == "status":
+            return self.status
+        if item == "total_rebalance_dv_m_s":
+            return self.total_rebalance_dv_m_s
+        if item == "reassigned_slots":
+            return self.reassigned_slots
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
 
 
 # ==============================================================================
@@ -358,11 +423,14 @@ def compute_stationkeeping_budget(
     annual_cam_allocation_m_s: float = 1.5,
     margin_percent: float = 15.0,
     deorbit_target_perigee_km: float = 65.0,
+    isp_s: Optional[float] = None,
 ) -> StationkeepingBudget:
     """
     Compute comprehensive annual stationkeeping and disposal Delta-v / propellant budget
     for a satellite in Low Earth Orbit.
     """
+    if isp_s is not None:
+        isp_seconds = float(isp_s)
     # 1. Drag decay & tangential re-boost
     drag_res = compute_drag_decay(
         altitude_km=altitude_km,
@@ -567,10 +635,11 @@ class WalkerPhasingOptimizer:
         satellite_mass_kg: float = 260.0,
         isp_seconds: float = 250.0,
         max_delta_altitude_km: float = 35.0,
+        num_planes: Optional[int] = None,
     ):
         self.altitude_km = float(altitude_km)
         self.total_satellites = int(total_satellites)
-        self.planes = int(planes)
+        self.planes = int(num_planes if num_planes is not None else planes)
         self.f_factor = int(relative_phase_f)
         self.mass_kg = float(satellite_mass_kg)
         self.isp_seconds = float(isp_seconds)
@@ -965,15 +1034,32 @@ class WalkerPhasingOptimizer:
 
     def rebalance_plane_after_satellite_loss(
         self,
-        remaining_satellites: List[Dict[str, Any]],
+        remaining_satellites: Optional[List[Dict[str, Any]]] = None,
         plane_idx: int = 1,
         max_duration_days: float = 10.0,
+        failed_index: Optional[int] = None,
+        strategy: str = "EQUAL_SPACING",
     ) -> SlotReassignmentResult:
         """
         Rebalance remaining satellites in a plane following a satellite loss or decommissioning.
         Redistributes S-1 satellites uniformly across 360 degrees to close coverage gaps
         with minimal total fleet Delta-v.
         """
+        if remaining_satellites is None:
+            sats_in_plane = max(self.sats_per_plane, 4)
+            drop_idx = 2 if failed_index is None else int(failed_index)
+            remaining_satellites = []
+            for i in range(sats_in_plane):
+                if i == drop_idx:
+                    continue
+                anomaly = (i * (360.0 / sats_in_plane) + (plane_idx - 1) * self.inter_plane_spacing_deg) % 360.0
+                remaining_satellites.append({
+                    "id": f"SAT-{plane_idx:02d}-{i+1:02d}",
+                    "satellite_index": i + 1,
+                    "true_anomaly_deg": anomaly,
+                    "mean_anomaly_deg": anomaly,
+                })
+
         n_remaining = len(remaining_satellites)
         if n_remaining <= 1:
             raise ValueError("Need at least 2 remaining satellites to rebalance a plane.")

@@ -6,6 +6,7 @@ NASA Space Apps Challenge 2026 | AYAZ Takımı | Lider Mimar: Bahattin Yunus Çe
 
 import streamlit as st
 import numpy as np
+import torch
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timezone
@@ -19,7 +20,7 @@ from aegis_leo.physics.atmosphere_models import compare_atmospheric_models
 from aegis_leo.physics.ground_track import calculate_ground_track, analyze_communication_blackouts, GROUND_STATIONS
 from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
 from aegis_leo.physics.perturbations import compute_all_perturbations, HighPrecisionPerturbationEngine
-from aegis_leo.physics.drag_cross_section import SpacecraftGeometry, calculate_solar_beta_angle_analytical, compute_effective_cross_section_orbit_average
+from aegis_leo.physics.drag_cross_section import SpacecraftGeometry, compute_solar_beta_angle, compute_orbit_averaged_metrics
 from aegis_leo.physics.reentry_footprint import simulate_reentry_monte_carlo, format_footprint_summary, POINT_NEMO as PN_GEO
 
 # --- Risk Motoru & B-Düzlemi ---
@@ -34,7 +35,7 @@ from aegis_leo.ai.pareto_optimizer import ParetoManeuverOptimizer
 from aegis_leo.ai.quantizer import benchmark_edge_inference
 from aegis_leo.ai.low_thrust import LowThrustAvoidancePlanner, ElectricThruster
 from aegis_leo.ai.mpc_avoidance import SCPAvoidancePlanner, MPCAvoidanceController, AvoidanceEllipsoid
-from aegis_leo.ai.drag_makeup import AtmosphericWaveEnvironment, compare_admu_controllers, GOCE_QIT25_PRESET, STARLINK_KRYPTON_PRESET
+from aegis_leo.ai.drag_makeup import AtmosphericDisturbanceSynthesizer, compare_admu_controllers, VLEOThruster
 from aegis_leo.ai.federated_swarm import build_walker_constellation_federation, compare_fedavg_vs_fedprox
 from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.ai.hardware_telemetry import OBCHardwareWatchdog
@@ -422,7 +423,7 @@ with t_fleet:
     with f_col1:
         fleet_size = st.slider("Takımyıldız Uydu Sayısı (T):", 12, 72, 24, step=6)
         num_planes = st.slider("Yörünge Düzlemi Sayısı (P):", 2, 8, 4, step=1)
-        phasing_opt = WalkerPhasingOptimizer(total_satellites=fleet_size, num_planes=num_planes, altitude_km=satellite["altitude_km"])
+        phasing_opt = WalkerPhasingOptimizer(total_satellites=fleet_size, planes=num_planes, altitude_km=satellite["altitude_km"])
         budget = compute_stationkeeping_budget(altitude_km=satellite["altitude_km"], mass_kg=satellite["mass_kg"], area_m2=satellite["area_m2"], isp_s=satellite["isp_seconds"])
 
         st.markdown(f"""

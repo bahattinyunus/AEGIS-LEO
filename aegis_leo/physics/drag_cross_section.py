@@ -784,3 +784,9 @@ def compute_variable_attitude_drag_acceleration(
     drag_props["drag_accel_mag_m_s2"] = float(a_drag_m_s2)
 
     return a_drag_km_s2, drag_props
+
+
+# Aliases for compatibility with mission control interfaces
+calculate_solar_beta_angle_analytical = compute_solar_beta_angle
+compute_effective_cross_section_orbit_average = compute_orbit_averaged_metrics
+

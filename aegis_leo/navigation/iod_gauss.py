@@ -20,6 +20,7 @@ References:
 
 from dataclasses import dataclass, field
 from typing import Tuple, List, Dict, Any, Optional
+import math
 import numpy as np
 
 from aegis_leo.constants import (
@@ -118,6 +119,11 @@ class IODResult:
     converged: bool = True
     iterations: int = 1
     light_time_corrected: bool = False
+
+    @property
+    def orbital_elements(self) -> Dict[str, float]:
+        """Keplerian orbital elements dictionary alias."""
+        return self.elements
 
     def __post_init__(self):
         self.r2_eci_km = np.asarray(self.r2_eci_km, dtype=float).reshape(3,)
@@ -967,31 +973,22 @@ def laplace_iod(
 # ---------------------------------------------------------------------------
 
 def initial_orbit_determination(
-    obs1: OpticalObservation,
-    obs2: OpticalObservation,
-    obs3: OpticalObservation,
+    obs1: Optional[OpticalObservation] = None,
+    obs2: Optional[OpticalObservation] = None,
+    obs3: Optional[OpticalObservation] = None,
     method: str = "auto",
     mu: float = EARTH_MU,
+    observations: Optional[List[OpticalObservation]] = None,
     **kwargs: Any,
 ) -> IODResult:
     """
     Unified Initial Orbit Determination entry point.
-
-    Supported methods:
-        - 'auto': Selects Gauss with iterative refinement as standard, falling back to Laplace.
-        - 'gauss': Gauss IOD without iterative refinement.
-        - 'gauss_iterative': Gauss IOD with Universal Kepler iterative refinement.
-        - 'laplace': Laplace Initial Orbit Determination.
-
-    Args:
-        obs1, obs2, obs3: Optical angles-only observations.
-        method: Method identifier ('auto', 'gauss', 'gauss_iterative', 'laplace').
-        mu: Gravitational parameter (km^3/s^2).
-        **kwargs: Additional parameters forwarded to solvers (e.g. iterate, max_iter, tol).
-
-    Returns:
-        IODResult object.
     """
+    if observations is not None and len(observations) >= 3:
+        obs1, obs2, obs3 = observations[0], observations[1], observations[2]
+    if obs1 is None or obs2 is None or obs3 is None:
+        raise ValueError("Three optical observations (obs1, obs2, obs3) or observations list required.")
+
     method_lower = method.lower()
     if method_lower in ("auto", "gauss_iterative"):
         return gauss_iod(obs1, obs2, obs3, mu=mu, iterate=True, **kwargs)
@@ -1008,17 +1005,20 @@ def initial_orbit_determination(
 # ---------------------------------------------------------------------------
 
 def generate_synthetic_optical_observations(
-    r0: np.ndarray,
-    v0: np.ndarray,
-    site_lat_deg: float,
-    site_lon_deg: float,
-    site_alt_km: float,
-    observation_times_s: List[float],
+    r0: Optional[np.ndarray] = None,
+    v0: Optional[np.ndarray] = None,
+    site_lat_deg: float = 35.0,
+    site_lon_deg: float = -106.0,
+    site_alt_km: float = 2.0,
+    observation_times_s: Optional[List[float]] = None,
     gmst0_rad: float = 0.0,
     noise_arcsec: float = 0.0,
     light_time_delay: bool = False,
     seed: Optional[int] = None,
     mu: float = EARTH_MU,
+    altitude_km: Optional[float] = None,
+    inclination_deg: Optional[float] = None,
+    tracking_interval_s: Optional[float] = None,
 ) -> List[OpticalObservation]:
     """
     Generate synthetic optical angles-only observations (RA and Dec) from a ground station
@@ -1040,6 +1040,22 @@ def generate_synthetic_optical_observations(
     Returns:
         List of OpticalObservation objects.
     """
+    if altitude_km is not None:
+        r_mag = EARTH_RADIUS_KM + float(altitude_km)
+        inc_rad = math.radians(float(inclination_deg if inclination_deg is not None else 53.0))
+        v_mag = math.sqrt(mu / r_mag)
+        r0 = np.array([r_mag, 0.0, 0.0])
+        v0 = np.array([0.0, v_mag * math.cos(inc_rad), v_mag * math.sin(inc_rad)])
+        dt = tracking_interval_s if tracking_interval_s is not None else 120.0
+        observation_times_s = [0.0, dt, 2.0 * dt]
+
+    if r0 is None or v0 is None:
+        r0 = np.array([EARTH_RADIUS_KM + 550.0, 0.0, 0.0])
+        v_mag = math.sqrt(mu / (EARTH_RADIUS_KM + 550.0))
+        v0 = np.array([0.0, v_mag * math.cos(math.radians(53.0)), v_mag * math.sin(math.radians(53.0))])
+
+    if observation_times_s is None:
+        observation_times_s = [0.0, 120.0, 240.0]
     rng = np.random.default_rng(seed)
     observations: List[OpticalObservation] = []
 

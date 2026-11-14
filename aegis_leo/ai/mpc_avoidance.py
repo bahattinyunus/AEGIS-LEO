@@ -22,7 +22,7 @@ Implements:
 7. Pareto trade-off frontier generator (avoidance clearance margin vs. Delta-v expenditure).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from enum import Enum
 import math
 from typing import Dict, List, Tuple, Optional, Any, Callable, Union
@@ -102,10 +102,20 @@ class AvoidanceEllipsoid:
     center: np.ndarray = field(default_factory=lambda: np.zeros(3)) # Relative center (m)
     semi_axes: np.ndarray = field(default_factory=lambda: np.array([50.0, 150.0, 50.0])) # [a_radial, a_intrack, a_crosstrack] (m)
     rotation: Optional[np.ndarray] = None # 3x3 orthonormal orientation matrix
+    center_rel_km: InitVar[Optional[np.ndarray]] = None
+    semi_axes_km: InitVar[Optional[np.ndarray]] = None
 
-    def __post_init__(self):
-        self.center = np.asarray(self.center, dtype=float)
-        self.semi_axes = np.asarray(self.semi_axes, dtype=float)
+    def __post_init__(self, center_rel_km: Optional[np.ndarray] = None, semi_axes_km: Optional[np.ndarray] = None):
+        if center_rel_km is not None:
+            self.center = np.asarray(center_rel_km, dtype=float) * 1000.0
+        else:
+            self.center = np.asarray(self.center, dtype=float)
+
+        if semi_axes_km is not None:
+            self.semi_axes = np.asarray(semi_axes_km, dtype=float) * 1000.0
+        else:
+            self.semi_axes = np.asarray(self.semi_axes, dtype=float)
+
         if self.rotation is None:
             self.rotation = np.eye(3, dtype=float)
         else:
@@ -483,6 +493,18 @@ class SCPAvoidanceResult:
     tca_time_s: float                    # Time of Closest Approach (s)
     tca_miss_distance_m: float           # Geometric miss distance at TCA (m)
 
+    @property
+    def total_delta_v_m_s(self) -> float:
+        return self.delta_v_total_m_s
+
+    @property
+    def trajectory_states(self) -> np.ndarray:
+        return self.trajectory
+
+    @property
+    def min_obstacle_distance_km(self) -> float:
+        return self.min_euclidean_distance_m / 1000.0
+
 
 class SCPAvoidancePlanner:
     """
@@ -503,11 +525,15 @@ class SCPAvoidancePlanner:
         slack_penalty: float = 1e4,
         max_scp_iterations: int = 15,
         tolerance: float = 1e-4,
+        time_step_s: Optional[float] = None,
+        max_thrust_accel: Optional[float] = None,
     ):
         self.dynamics = dynamics or ClohessyWiltshireDynamics()
+        if thruster_limits is None and max_thrust_accel is not None:
+            thruster_limits = SpacecraftThrusterLimits(max_accel_m_s2=max_thrust_accel)
         self.limits = thruster_limits or SpacecraftThrusterLimits()
         self.N = int(horizon_steps)
-        self.dt = float(dt_s)
+        self.dt = float(time_step_s if time_step_s is not None else dt_s)
         self.fuel_weight = float(fuel_weight)
         self.slew_weight = float(slew_weight)
         self.terminal_tracking_weight = float(terminal_tracking_weight)
@@ -552,14 +578,16 @@ class SCPAvoidancePlanner:
 
     def plan_avoidance(
         self,
-        x0: np.ndarray,
-        obstacle: Union[AvoidanceEllipsoid, List[AvoidanceEllipsoid]],
+        x0: Optional[np.ndarray] = None,
+        obstacle: Optional[Union[AvoidanceEllipsoid, List[AvoidanceEllipsoid]]] = None,
         debris_trajectory: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
         x_target: Optional[np.ndarray] = None,
         u_prev: Optional[np.ndarray] = None,
         initial_controls: Optional[np.ndarray] = None,
         margin_factor: float = 1.0,
         trust_region_init: float = 0.05,
+        initial_state: Optional[np.ndarray] = None,
+        obstacles: Optional[Union[AvoidanceEllipsoid, List[AvoidanceEllipsoid]]] = None,
     ) -> SCPAvoidanceResult:
         """
         Execute Sequential Convex Programming to plan a collision avoidance trajectory.
@@ -577,6 +605,14 @@ class SCPAvoidancePlanner:
         Returns:
             SCPAvoidanceResult containing optimal controls, trajectory, Delta-v, and clearance metrics.
         """
+        if x0 is None and initial_state is not None:
+            x0 = initial_state
+        if obstacle is None and obstacles is not None:
+            obstacle = obstacles
+        if x0 is None:
+            raise ValueError("x0 or initial_state must be provided.")
+        if obstacle is None:
+            raise ValueError("obstacle or obstacles must be provided.")
         x0 = np.asarray(x0, dtype=float)
         if isinstance(obstacle, AvoidanceEllipsoid):
             obstacles = [obstacle]

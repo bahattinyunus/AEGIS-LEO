@@ -1212,3 +1212,20 @@ class ODARGenerator:
         )
 
         return cls(mission=mission, spacecraft=spacecraft, orbit=orbit, assessment=assessment)
+
+
+def generate_odar_report(satellite: Dict[str, Any], collision_pc: float = 1.0e-5) -> str:
+    """Helper to generate a NASA-STD-8719.14B ODAR Markdown report from a satellite dict."""
+    generator = ODARGenerator.create_leo_mission(
+        mission_name=str(satellite.get("name", "AEGIS-LEO Satellite")),
+        norad_id=int(satellite.get("norad_id", 44713)),
+        altitude_km=float(satellite.get("altitude_km", 550.0)),
+        inclination_deg=float(satellite.get("inclination_deg", 53.0)),
+        wet_mass_kg=float(satellite.get("mass_kg", 260.0)),
+        dry_mass_kg=float(satellite.get("dry_mass_kg", satellite.get("mass_kg", 260.0) * 0.9)),
+        cross_section_area_m2=float(satellite.get("area_m2", 2.2)),
+        operational_pc=float(collision_pc),
+        has_passivation_valves=True,
+    )
+    return generator.generate_markdown()
+
