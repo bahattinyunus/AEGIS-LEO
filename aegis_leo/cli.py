@@ -30,6 +30,10 @@ from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.data.celestrak_live import CelesTrakClient
 from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
 from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
+from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay
+from aegis_leo.adr.electrodynamic_tether import compare_all_deorbit_methods
+from aegis_leo.adr.laser_ablation import simulate_laser_debris_engagement, LaserStationSpecs, DebrisTargetSpecs, LaserPlatformType
+from aegis_leo.agents.swarm_consensus import SwarmConsensusCoordinator
 
 
 def cmd_status(args):
@@ -204,6 +208,99 @@ def cmd_swarm(args):
     print("=" * 75 + "\n")
 
 
+def cmd_lifetime(args):
+    res = simulate_orbit_decay(
+        altitude_km=args.alt,
+        mass_kg=args.mass,
+        drag_area_m2=args.area,
+        cd=args.cd,
+    )
+    print("\n" + "=" * 65)
+    print(">> ORBIT LIFETIME & REGULATORY DEORBIT AUDIT <<")
+    print("=" * 65)
+    print(f"Initial Altitude:      {res.initial_altitude_km:.1f} km")
+    print(f"Ballistic Coefficient: {res.ballistic_coefficient_kg_m2:.2f} kg/m²")
+    print(f"Estimated Lifetime:    {res.estimated_lifetime_years:.2f} years ({res.reentry_date_estimate_days:.0f} days)")
+    print(f"FCC 5-Year Mandate:    {'[PASS] COMPLIANT' if res.fcc_5year_compliant else '[FAIL] NON-COMPLIANT'}")
+    print(f"NASA 25-Year Rule:     {'[PASS] COMPLIANT' if res.nasa_25year_compliant else '[FAIL] NON-COMPLIANT'}")
+    print(f"Mean Solar Activity:   {res.solar_flux_avg:.1f} SFU (11-Year Cycle)")
+    print(f"Status:                {res.status}")
+    print("=" * 65 + "\n")
+
+
+def cmd_tether(args):
+    comp = compare_all_deorbit_methods(
+        satellite_mass_kg=args.mass,
+        initial_altitude_km=args.alt,
+    )
+    print("\n" + "=" * 70)
+    print(">> ELECTRODYNAMIC TETHER & DEORBIT PROPULSION TRADE-OFF <<")
+    print("=" * 70)
+    print(f"Satellite Mass: {args.mass:.1f} kg | Initial Altitude: {args.alt:.1f} km")
+    print("-" * 70)
+    for method, metrics in comp["methods"].items():
+        print(f"  * {method:<28}: {metrics['duration_days']:>7.1f} days | Propellant: {metrics['propellant_mass_kg']:>5.1f} kg | Mass: {metrics['subsystem_mass_kg']:>5.1f} kg")
+    print("-" * 70)
+    print(f">> RECOMMENDED STRATEGY: {comp['recommended_method']}")
+    print("=" * 70 + "\n")
+
+
+def cmd_laser(args):
+    laser = LaserStationSpecs(
+        platform=LaserPlatformType.SPACE_BASED_ORBITAL if args.space else LaserPlatformType.GROUND_BASED,
+        pulse_energy_joules=100.0,
+        repetition_rate_hz=args.power * 10.0,
+    )
+    debris = DebrisTargetSpecs(
+        mass_kg=args.mass,
+        effective_diameter_cm=args.dia,
+        perigee_alt_km=args.perigee,
+        apogee_alt_km=args.apogee,
+    )
+    res = simulate_laser_debris_engagement(
+        laser=laser,
+        debris=debris,
+        engagement_duration_s=args.duration,
+    )
+    print("\n" + "=" * 68)
+    print(">> HIGH-POWER PULSED LASER ORBITAL DEBRIS REMEDIATION (LODR) <<")
+    print("=" * 68)
+    print(f"Target ID:          {res.target_id} ({debris.mass_kg} kg, {debris.effective_diameter_cm} cm)")
+    print(f"Platform:           {laser.platform.value} ({laser.average_power_kw:.1f} kW average beam)")
+    print(f"Pulses on Target:   {res.pulses_on_target} / {res.total_pulses_fired} ({res.engagement_duration_s:.0f}s pass)")
+    print(f"Target Fluence:     {res.average_fluence_j_cm2:.2f} J/cm² (Coupling Cm: {res.recoil_momentum_coupling_u_ns_j:.1f} µN·s/J)")
+    print(f"Recoil Impulse:     {res.total_impulse_n_s*1000:.1f} mN·s -> Delta-V: {res.delta_v_m_s*1000:.2f} mm/s")
+    print(f"Perigee Drop:       {res.perigee_drop_km*1000:.1f} m (New Perigee: {res.new_perigee_alt_km:.2f} km)")
+    print(f"Decay Accelerated:  {res.deorbit_accelerated_years:.1f} years saved")
+    print(f"Fragmentation Risk: {res.fragmentation_risk_score*100:.2f}% (Safe < 5%)")
+    print("=" * 68 + "\n")
+
+
+def cmd_consensus(args):
+    coord = SwarmConsensusCoordinator()
+    decision = coord.arbitrate_conjunction(
+        sat_a_id=args.sat_a,
+        sat_b_id=args.sat_b,
+        initial_miss_m=args.miss,
+        tca_s=args.tca,
+        nominal_dv_req_m_s=args.dv,
+    )
+    print("\n" + "=" * 70)
+    print(">> BYZANTINE FAULT-TOLERANT SWARM MANEUVER QUORUM ARBITRATION <<")
+    print("=" * 70)
+    print(f"Proposal ID:        {decision.proposal_id}")
+    print(f"Elected Maneuver:   {decision.elected_satellite_to_maneuver} (Hold: {decision.holding_satellite})")
+    print(f"Assigned Delta-V:   {decision.required_delta_v_m_s:.3f} m/s (Vector: {decision.delta_v_vector})")
+    print(f"Consensus Quorum:   {decision.quorum_percentage:.1f}% ({decision.total_peers} peers, BFT F={decision.byzantine_tolerance_f})")
+    print(f"Secondary Risk:     {'CLEARED - NO SECONDARY CONJUNCTION' if decision.secondary_risk_cleared else 'WARNING - SECONDARY HAZARD'}")
+    print(f"Decision State:     {decision.agreement_state.value}")
+    print("-" * 70)
+    print("AUDIT TRAIL:")
+    for event in decision.audit_trail:
+        print(f"  * {event}")
+    print("=" * 70 + "\n")
+
+
 
 def main():
     parser = argparse.ArgumentParser(prog="aegis", description="AEGIS-LEO SSA Mission Control CLI")
@@ -267,6 +364,40 @@ def main():
     p_swm.add_argument("--f107", type=float, default=245.0, help="F10.7 solar flux (SFU)")
     p_swm.add_argument("--fuel", type=float, default=18.5, help="Propellant remaining (kg)")
     p_swm.set_defaults(func=cmd_swarm)
+
+    # lifetime
+    p_life = subparsers.add_parser("lifetime", help="Predict orbit lifetime & check FCC 5-year compliance")
+    p_life.add_argument("--alt", type=float, default=450.0, help="Orbital altitude (km)")
+    p_life.add_argument("--mass", type=float, default=260.0, help="Spacecraft mass (kg)")
+    p_life.add_argument("--area", type=float, default=2.2, help="Drag cross-section area (m²)")
+    p_life.add_argument("--cd", type=float, default=2.2, help="Drag coefficient Cd")
+    p_life.set_defaults(func=cmd_lifetime)
+
+    # tether
+    p_teth = subparsers.add_parser("tether", help="Electrodynamic tether propellantless deorbit comparison")
+    p_teth.add_argument("--mass", type=float, default=250.0, help="Satellite mass (kg)")
+    p_teth.add_argument("--alt", type=float, default=750.0, help="Initial altitude (km)")
+    p_teth.set_defaults(func=cmd_tether)
+
+    # laser
+    p_las = subparsers.add_parser("laser", help="Laser orbital debris remediation momentum ablation")
+    p_las.add_argument("--mass", type=float, default=1.2, help="Debris target mass (kg)")
+    p_las.add_argument("--dia", type=float, default=12.0, help="Debris diameter (cm)")
+    p_las.add_argument("--perigee", type=float, default=450.0, help="Target perigee altitude (km)")
+    p_las.add_argument("--apogee", type=float, default=750.0, help="Target apogee altitude (km)")
+    p_las.add_argument("--power", type=float, default=10.0, help="Laser average power (kW)")
+    p_las.add_argument("--duration", type=float, default=45.0, help="Engagement duration (s)")
+    p_las.add_argument("--space", action="store_true", help="Space-based platform (default ground-based)")
+    p_las.set_defaults(func=cmd_laser)
+
+    # consensus
+    p_con = subparsers.add_parser("consensus", help="Swarm Byzantine fault-tolerant maneuver consensus")
+    p_con.add_argument("--sat-a", default="SAT-WALKER-A1", help="First satellite ID")
+    p_con.add_argument("--sat-b", default="SAT-WALKER-A2", help="Second satellite ID")
+    p_con.add_argument("--miss", type=float, default=45.0, help="Miss distance (m)")
+    p_con.add_argument("--tca", type=float, default=1800.0, help="Time to closest approach (s)")
+    p_con.add_argument("--dv", type=float, default=0.45, help="Nominal Delta-V required (m/s)")
+    p_con.set_defaults(func=cmd_consensus)
 
 
     args = parser.parse_args()

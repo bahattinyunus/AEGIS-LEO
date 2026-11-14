@@ -6,7 +6,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-329%2F329%20Geçti-brightgreen.svg?style=for-the-badge)]()
+[![Testler](https://img.shields.io/badge/Testler-352%2F352%20Geçti-brightgreen.svg?style=for-the-badge)]()
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 <p align="center">
@@ -272,6 +272,10 @@ Komut satırı aracı, terminal ortamında tam teşekküllü görev operasyonlar
 | `eval` | Birleşik A-DRI risk puanını hesaplar | `python -m aegis_leo.cli eval --sat STARLINK_LEO --miss 0.45 --kp 8.0` |
 | `burn` | Otonom kaçınma ateşlemesini planlar | `python -m aegis_leo.cli burn --sat STARLINK_LEO --miss 0.45` |
 | `swarm` | **9-Ajanlı Otonom Sürü Zekası Konsensüs Döngüsü** | `python -m aegis_leo.cli swarm --sat STARLINK_LEO --kp 7.8 --miss 0.082` |
+| `consensus` | **Bizans Hata Toleranslı (BFT) Sürü Manevra Konsensüsü** | `python -m aegis_leo.cli consensus --sat-a SAT-A1 --sat-b SAT-A2` |
+| `lifetime` | **FCC 5-Yıl & NASA 25-Yıl Yörünge Ömrü Tahmini** | `python -m aegis_leo.cli lifetime --alt 450 --mass 260` |
+| `tether` | **Elektrodinamik Tether (EDT) İtkisiz Deorbit Analizi** | `python -m aegis_leo.cli tether --mass 250 --alt 750` |
+| `laser` | **Darbeli Lazer Ablasyon (LODR) Enkaz İtme Analizi** | `python -m aegis_leo.cli laser --mass 1.2 --dia 12 --power 10` |
 | `monte-carlo` | Monte Carlo kovaryans dağılımı simülasyonu | `python -m aegis_leo.cli monte-carlo --miss 0.45 --trials 1000` |
 | `breakup` | NASA standart parçalanma kaskad modeli | `python -m aegis_leo.cli breakup --target-mass 260.0 --proj-mass 5.0` |
 | `deorbit` | Point Nemo hedefli kontrollü deorbit analizi | `python -m aegis_leo.cli deorbit --alt 550.0 --mass 260.0` |
@@ -303,6 +307,10 @@ uvicorn backend.main:app --reload --port 8000
 - `POST /api/compliance/audit`: NASA-STD-8719.14 denetimi ve ODAR raporu.
 - `GET  /api/swarm/status`: 9 otonom uçuş ajanının anlık sağlık ve telemetri durumu.
 - `POST /api/swarm/consensus-cycle`: Uçtan uca 9-ajanlı otonom konsensüs ve ateşleme döngüsü.
+- `POST /api/lifetime/decay-prediction`: 11 yıllık Güneş döngüsü altında yörünge ömrü & FCC 5-Yıl denetimi.
+- `GET  /api/adr/electrodynamic-tether`: Elektrodinamik Tether (EDT) Lorentziyen itkisiz deorbit simülasyonu.
+- `POST /api/adr/laser-ablation`: Uzay/yer konuşlu darbeli lazer ablasyonu (LODR) ile enkaz perije düşürme.
+- `POST /api/swarm/bft-consensus`: Bizans hata toleranslı (BFT) ve Nash pazarlıklı otonom kaçınma tahsisi.
 
 ---
 
@@ -340,32 +348,35 @@ AEGIS-LEO, **NASA-STD-8719.14** (*Process for Limiting Orbital Debris*) gereksin
 
 ## 🧪 Doğrulama & Test Paketi
 
-Depo, 18 bağımsız otonom geliştirici ajan ve ana mimari tarafından yazılan **329 adet** birim ve entegrasyon testinden oluşan uzay ajansı seviyesinde kapsamlı bir test paketi içerir:
+Depo, 18 bağımsız otonom geliştirici ajan ve ana mimari tarafından yazılan **352 adet** birim ve entegrasyon testinden oluşan uzay ajansı seviyesinde kapsamlı bir test paketi içerir:
 ```bash
 pytest -v
 ```
 
 ```text
-tests/test_advanced_features.py ............... [PASSED] (5 test: CelesTrak & TMR)
-tests/test_agents_swarm.py .................... [PASSED] (11 test: 9 Ajan & BFT Konsensüs)
+tests/test_advanced_features.py ............... [PASSED] (5 test: CelesTrak, TMR & CLI)
+tests/test_agents_swarm.py .................... [PASSED] (11 test: 9 Ajan & Swarm Telemetri)
 tests/test_ai_edge.py ......................... [PASSED] (4 test: PINN & INT8 Kuantizasyon)
-tests/test_api.py ............................. [PASSED] (9 test: FastAPI & Swarm API)
+tests/test_api.py ............................. [PASSED] (13 test: FastAPI & BFT Swarm API)
 tests/test_ccsds_cdm_xml.py ................... [PASSED] (20 test: CCSDS 508.0-B-1 CDM)
 tests/test_compliance.py ...................... [PASSED] (2 test: NASA-STD-8719)
 tests/test_cw_proximity.py .................... [PASSED] (23 test: HCW & Yamanaka-Ankersen)
 tests/test_debris_capture.py .................. [PASSED] (25 test: 6-DOF Kol & Detumbling)
 tests/test_drag_cross_section.py .............. [PASSED] (11 test: Açısal Kesit & Tutum)
 tests/test_drag_makeup.py ..................... [PASSED] (19 test: VLEO L1 Adaptif Kontrol)
+tests/test_electrodynamic_tether.py ........... [PASSED] (5 test: EDT Lorentziyen İtkisiz Deorbit)
 tests/test_federated_swarm.py ................. [PASSED] (25 test: ISL FedAvg & FedProx)
 tests/test_foster_bplane.py ................... [PASSED] (11 test: Foster/Chan B-Düzlemi)
 tests/test_global_standards.py ................ [PASSED] (6 test: CCSDS OEM/OPM)
 tests/test_ground_track_and_models.py ......... [PASSED] (3 test: Yer İzdüşümü & Blackout)
 tests/test_hardware_telemetry.py .............. [PASSED] (7 test: OBC Donanım & SEU Watchdog)
 tests/test_iod_gauss.py ....................... [PASSED] (20 test: Gauss/Laplace/Gibbs IOD)
+tests/test_laser_ablation.py .................. [PASSED] (5 test: LODR Darbeli Lazer Ablasyon)
 tests/test_laser_radar.py ..................... [PASSED] (23 test: LIDAR & Radar Swerling)
 tests/test_low_thrust.py ...................... [PASSED] (9 test: İyon İtki & Edelbaum)
 tests/test_mpc_avoidance.py ................... [PASSED] (9 test: MPC & SCP Optimizasyonu)
 tests/test_odar_generator.py .................. [PASSED] (10 test: NASA ODAR Raporlama)
+tests/test_orbit_lifetime.py .................. [PASSED] (6 test: King-Hele & FCC 5-Yıl Kuralı)
 tests/test_pareto.py .......................... [PASSED] (1 test: Çok Amaçlı Frontier)
 tests/test_perturbations.py ................... [PASSED] (12 test: Güneş Işınımı & 3. Cisim)
 tests/test_physics.py ......................... [PASSED] (6 test: RK4 & Termosfer)
@@ -374,8 +385,9 @@ tests/test_risk.py ............................ [PASSED] (3 test: A-DRI & ORDEM)
 tests/test_screening.py ....................... [PASSED] (3 test: Walker Delta Tarama)
 tests/test_sensor_fusion.py ................... [PASSED] (16 test: EKF & UKF Navigasyon)
 tests/test_stationkeeping.py .................. [PASSED] (12 test: Macar Algoritması & Yuva)
+tests/test_swarm_consensus.py ................. [PASSED] (3 test: BFT Quorum & Nash Pazarlığı)
 tests/test_swarm_telemetry_bus.py ............. [PASSED] (14 test: Hızlı Yayın Hattı)
-============================ 329 passed in 22.97s ============================
+============================ 352 passed in 27.48s ============================
 ```
 
 

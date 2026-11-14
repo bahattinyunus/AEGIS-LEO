@@ -45,6 +45,10 @@ from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor, POINT_NEMO
 from aegis_leo.risk.covariance_visualizer import generate_covariance_ellipsoid_mesh
 from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
+from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay, evaluate_deorbit_compliance_matrix
+from aegis_leo.adr.electrodynamic_tether import simulate_electrodynamic_tether_decay, compare_all_deorbit_methods
+from aegis_leo.adr.laser_ablation import simulate_laser_debris_engagement, LaserStationSpecs, DebrisTargetSpecs, LaserPlatformType
+from aegis_leo.agents.swarm_consensus import SwarmConsensusCoordinator
 
 
 app = FastAPI(
@@ -530,6 +534,108 @@ def execute_swarm_consensus_cycle(req: SwarmTelemetryRequest):
     telemetry = req.model_dump()
     result = _global_swarm_orchestrator.run_consensus_cycle(telemetry)
     return _sanitize_for_json(result)
+
+
+# --- Advanced Astrodynamics, ADR & Swarm Consensus Endpoints ---
+
+class LifetimePredictionRequest(BaseModel):
+    altitude_km: float = Field(default=450.0, ge=150.0, le=1200.0)
+    mass_kg: float = Field(default=260.0, gt=1.0)
+    drag_area_m2: float = Field(default=2.2, gt=0.01)
+    cd: float = Field(default=2.2, ge=1.0, le=4.0)
+    max_duration_years: float = Field(default=30.0, ge=1.0, le=50.0)
+
+
+@app.post("/api/lifetime/decay-prediction", summary="Long-term orbit lifetime & FCC 5-year compliance")
+def predict_orbital_lifetime(req: LifetimePredictionRequest):
+    """
+    Computes orbital decay under multi-harmonic 11-year solar cycles and scale heights.
+    Evaluates compliance against FCC 5-Year Rule and NASA 25-Year Rule.
+    """
+    res = simulate_orbit_decay(
+        altitude_km=req.altitude_km,
+        mass_kg=req.mass_kg,
+        drag_area_m2=req.drag_area_m2,
+        cd=req.cd,
+        max_duration_years=req.max_duration_years,
+    )
+    return res.to_dict()
+
+
+@app.get("/api/adr/electrodynamic-tether", summary="Electrodynamic tether propellantless deorbit simulation")
+def evaluate_electrodynamic_tether(
+    satellite_mass_kg: float = Query(250.0, ge=10.0, le=5000.0),
+    initial_altitude_km: float = Query(750.0, ge=300.0, le=1500.0),
+):
+    """
+    Simulates propellantless electrodynamic tether decay and compares with Chemical & Electric propulsion.
+    """
+    comp = compare_all_deorbit_methods(
+        satellite_mass_kg=satellite_mass_kg,
+        initial_altitude_km=initial_altitude_km,
+    )
+    return _sanitize_for_json(comp)
+
+
+class LaserRemediationRequest(BaseModel):
+    target_id: str = "DEBRIS-FRAG-LEO"
+    debris_mass_kg: float = Field(default=1.2, gt=0.01)
+    debris_diameter_cm: float = Field(default=12.0, gt=0.5)
+    perigee_km: float = Field(default=450.0, ge=150.0)
+    apogee_km: float = Field(default=750.0, ge=150.0)
+    laser_power_kw: float = Field(default=10.0, gt=0.1)
+    engagement_duration_s: float = Field(default=45.0, gt=1.0)
+    platform: str = Field(default="SPACE_BASED_ORBITAL")
+
+
+@app.post("/api/adr/laser-ablation", summary="High-power pulsed laser momentum ablation against orbital debris")
+def run_laser_debris_ablation(req: LaserRemediationRequest):
+    """
+    Simulates laser surface vaporization recoil impulse to lower debris perigee into atmosphere.
+    """
+    plat = LaserPlatformType.SPACE_BASED_ORBITAL if req.platform.upper() == "SPACE_BASED_ORBITAL" else LaserPlatformType.GROUND_BASED
+    laser = LaserStationSpecs(
+        platform=plat,
+        pulse_energy_joules=100.0,
+        repetition_rate_hz=max(1.0, req.laser_power_kw * 10.0),
+    )
+    debris = DebrisTargetSpecs(
+        target_id=req.target_id,
+        mass_kg=req.debris_mass_kg,
+        effective_diameter_cm=req.debris_diameter_cm,
+        perigee_alt_km=req.perigee_km,
+        apogee_alt_km=req.apogee_km,
+    )
+    res = simulate_laser_debris_engagement(
+        laser=laser,
+        debris=debris,
+        engagement_duration_s=req.engagement_duration_s,
+    )
+    return res.to_dict()
+
+
+class SwarmConsensusRequest(BaseModel):
+    sat_a_id: str = "SAT-WALKER-A1"
+    sat_b_id: str = "SAT-WALKER-A2"
+    initial_miss_m: float = Field(default=45.0, gt=0.0)
+    tca_s: float = Field(default=1800.0, gt=0.0)
+    nominal_dv_req_m_s: float = Field(default=0.45, gt=0.0)
+
+
+@app.post("/api/swarm/bft-consensus", summary="Byzantine fault-tolerant swarm consensus for avoidance allocation")
+def execute_swarm_bft_consensus(req: SwarmConsensusRequest):
+    """
+    Executes decentralized Quorum and Nash-bargaining arbitration between close-proximity satellites.
+    """
+    coordinator = SwarmConsensusCoordinator()
+    decision = coordinator.arbitrate_conjunction(
+        sat_a_id=req.sat_a_id,
+        sat_b_id=req.sat_b_id,
+        initial_miss_m=req.initial_miss_m,
+        tca_s=req.tca_s,
+        nominal_dv_req_m_s=req.nominal_dv_req_m_s,
+    )
+    return decision.to_dict()
 
 
 

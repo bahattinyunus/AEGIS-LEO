@@ -108,3 +108,59 @@ def test_swarm_endpoints():
     assert "AEGIS-SIG-" in data_cycle["commander_directive"]["authorization_signature"]
     assert len(data_cycle["swarm_votes"]) == 9
 
+
+def test_lifetime_api_endpoint():
+    payload = {
+        "altitude_km": 350.0,
+        "mass_kg": 200.0,
+        "drag_area_m2": 2.0,
+        "cd": 2.2,
+        "max_duration_years": 10.0,
+    }
+    resp = client.post("/api/lifetime/decay-prediction", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["fcc_5year_compliant"] is True
+    assert data["estimated_lifetime_years"] < 5.0
+
+
+def test_electrodynamic_tether_api_endpoint():
+    resp = client.get("/api/adr/electrodynamic-tether?satellite_mass_kg=250&initial_altitude_km=750")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "methods" in data
+    assert "ELECTRODYNAMIC_TETHER" in data["methods"]
+
+
+def test_laser_ablation_api_endpoint():
+    payload = {
+        "target_id": "DEBRIS-TEST-01",
+        "debris_mass_kg": 0.9,
+        "debris_diameter_cm": 14.0,
+        "perigee_km": 420.0,
+        "apogee_km": 720.0,
+        "laser_power_kw": 12.0,
+        "engagement_duration_s": 40.0,
+    }
+    resp = client.post("/api/adr/laser-ablation", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "PASS_COMPLETED"
+    assert data["delta_v_m_s"] > 0
+
+
+def test_swarm_bft_consensus_api_endpoint():
+    payload = {
+        "sat_a_id": "SAT-WALKER-A1",
+        "sat_b_id": "SAT-WALKER-A2",
+        "initial_miss_m": 45.0,
+        "tca_s": 1800.0,
+        "nominal_dv_req_m_s": 0.45,
+    }
+    resp = client.post("/api/swarm/bft-consensus", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["agreement_state"] == "MANEUVER_COMMITTED"
+    assert data["quorum_percentage"] >= 70.0
+
+

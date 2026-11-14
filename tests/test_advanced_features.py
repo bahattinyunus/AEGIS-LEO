@@ -8,7 +8,15 @@ from aegis_leo.ai.radiation_fault_simulator import RadiationFaultSimulator
 from aegis_leo.ai.pinn import get_pretrained_edge_pinn
 from aegis_leo.physics.deorbit_simulation import compute_deorbit_burn, simulate_reentry_corridor
 from aegis_leo.risk.covariance_visualizer import generate_covariance_ellipsoid_mesh
-from aegis_leo.cli import cmd_deorbit, cmd_rad_test, cmd_celestrak
+from aegis_leo.cli import (
+    cmd_deorbit,
+    cmd_rad_test,
+    cmd_celestrak,
+    cmd_lifetime,
+    cmd_tether,
+    cmd_laser,
+    cmd_consensus,
+)
 
 
 def test_celestrak_client_fetch():
@@ -67,3 +75,19 @@ def test_advanced_cli_commands(capsys):
     cmd_celestrak(argparse.Namespace(norad=25544))
     out_cel = capsys.readouterr().out
     assert "CelesTrak Live TLE" in out_cel
+
+    cmd_lifetime(argparse.Namespace(alt=400.0, mass=200.0, area=2.0, cd=2.2))
+    out_life = capsys.readouterr().out
+    assert "ORBIT LIFETIME" in out_life
+
+    cmd_tether(argparse.Namespace(mass=250.0, alt=750.0))
+    out_teth = capsys.readouterr().out
+    assert "ELECTRODYNAMIC TETHER" in out_teth
+
+    cmd_laser(argparse.Namespace(mass=1.2, dia=12.0, perigee=450.0, apogee=750.0, power=10.0, duration=45.0, space=False))
+    out_las = capsys.readouterr().out
+    assert "PULSED LASER" in out_las
+
+    cmd_consensus(argparse.Namespace(sat_a="SAT-WALKER-A1", sat_b="SAT-WALKER-A2", miss=45.0, tca=1800.0, dv=0.45))
+    out_con = capsys.readouterr().out
+    assert "SWARM MANEUVER QUORUM" in out_con

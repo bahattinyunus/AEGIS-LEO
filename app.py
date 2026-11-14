@@ -46,6 +46,10 @@ from aegis_leo.navigation.iod_gauss import generate_synthetic_optical_observatio
 from aegis_leo.sensors.laser_radar import SpaceborneRadar, SpaceborneLidar, generate_range_doppler_map, sample_swerling_rcs
 from aegis_leo.astrodynamics.cw_proximity import ClohessyWiltshirePropagator, YamanakaAnkersenPropagator, plan_2_impulse_rendezvous, plan_4_impulse_rendezvous
 from aegis_leo.adr.debris_capture import RoboticArm6DOF, HarpoonTetherSystem, PostCaptureMomentumManager
+from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay
+from aegis_leo.adr.electrodynamic_tether import compare_all_deorbit_methods, simulate_electrodynamic_tether_decay
+from aegis_leo.adr.laser_ablation import simulate_laser_debris_engagement, LaserStationSpecs, DebrisTargetSpecs, LaserPlatformType
+from aegis_leo.agents.swarm_consensus import SwarmConsensusCoordinator
 
 # --- Takımyıldız Taraması & Veri Beslemeleri ---
 from aegis_leo.screening.constellation_screen import generate_walker_delta_constellation, generate_synthetic_debris_cloud, ConstellationConjunctionScreener
@@ -412,6 +416,34 @@ with t_swarm:
             </div>
             """, unsafe_allow_html=True)
 
+    st.markdown("---")
+    st.subheader("🤝 Bizans Hata Toleranslı (BFT) Sürü Manevra Konsensüsü & Nash Pazarlığı")
+    st.caption("Takımyıldız kümesinde merkezi yer istasyonu olmaksızın, otonom manevra paylaştırma ve ikincil çarpışma önleme protokolü.")
+
+    bft_c1, bft_c2 = st.columns([1, 1])
+    with bft_c1:
+        sat_a_choice = st.selectbox("Birinci Takımyıldız Uydusu:", ["SAT-WALKER-A1", "SAT-WALKER-A2", "SAT-WALKER-B1"])
+        sat_b_choice = st.selectbox("İkinci Takımyıldız Uydusu:", ["SAT-WALKER-A3", "SAT-WALKER-A2", "SAT-WALKER-C1"])
+        miss_m = st.slider("Tahmini En Düşük Mesafe (m):", 10.0, 200.0, 45.0, step=5.0)
+        tca_sec = st.slider("En Yakın Geçişe Kalan Zaman (TCA - s):", 300, 7200, 1800, step=300)
+
+        coord = SwarmConsensusCoordinator()
+        bft_res = coord.arbitrate_conjunction(sat_a_id=sat_a_choice, sat_b_id=sat_b_choice, initial_miss_m=miss_m, tca_s=tca_sec)
+
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Otonom Manevra Görevi Verilen Uydu (Nash Çözümü)</div>
+            <div class="hud-val-cyan">{bft_res.elected_satellite_to_maneuver}</div>
+            <small style="color:#94a3b8;">Yörüngesini Koruyan: <b>{bft_res.holding_satellite}</b> | Gerekli İtki: <b>{bft_res.required_delta_v_m_s:.3f} m/s</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with bft_c2:
+        st.markdown("##### 📜 Sürü Oylama Defteri & BFT Güvenlik Kanıtı")
+        st.success(f"Quorum Onay Oranı: **%{bft_res.quorum_percentage:.1f}** | Bizans Hata Eşiği: **F={bft_res.byzantine_tolerance_f} Düğüm** | Karar: **{bft_res.agreement_state.value}**")
+        for ev in bft_res.audit_trail:
+            st.markdown(f"- `{ev}`")
+
 # ==========================================
 # SEKME 3: TAKIMYILDIZ & YUVA EŞGÜDÜMÜ
 # ==========================================
@@ -568,6 +600,44 @@ with t_adr:
         fig_rot.update_layout(title="B-dot Manyetik Torker Açısal Hız Sönümleme Profili", xaxis_title="Zaman (s)", yaxis_title="|Omega| (°/s)", template="plotly_dark", height=320)
         st.plotly_chart(fig_rot, use_container_width=True)
 
+    st.markdown("---")
+    st.subheader("⚡ Elektrodinamik Tether (EDT) İtkisiz Deorbit & Lazer Ablasyon (LODR)")
+    st.caption("Yakıtsız Lorentz kuvvetiyle kontrollü alçalma ve uzay konuşlu darbeli lazerle enkaz perijesini atmosfere indirme.")
+
+    adr_b1, adr_b2 = st.columns([1, 1])
+    with adr_b1:
+        st.markdown("#### ⚡ Elektrodinamik Tether (EDT) Simülasyonu")
+        edt_alt = st.slider("Başlangıç Enkaz İrtifası (km):", 500.0, 1000.0, 750.0, step=25.0)
+        edt_trade = compare_all_deorbit_methods(satellite_mass_kg=satellite["mass_kg"], initial_altitude_km=edt_alt)
+
+        methods_summary = []
+        for m_name, m_data in edt_trade["methods"].items():
+            methods_summary.append({
+                "Yöntem": m_name,
+                "Süre (Gün)": m_data["duration_days"],
+                "Yakıt (kg)": m_data["propellant_mass_kg"],
+                "Ek Kütle (kg)": m_data["subsystem_mass_kg"],
+            })
+        st.dataframe(methods_summary, use_container_width=True)
+        st.success(f"Önerilen ADR Teknolojisi: **{edt_trade['recommended_method']}** (0 kg Yakıt Harcaması)")
+
+    with adr_b2:
+        st.markdown("#### 🎯 Uzay Tabanlı Darbeli Lazer Ablasyon (LODR)")
+        las_pwr = st.slider("Lazer Ortalama Gücü (kW):", 2.0, 50.0, 10.0, step=2.0)
+        las_dur = st.slider("Hedef Angajman Süresi (s):", 10.0, 120.0, 45.0, step=5.0)
+
+        laser_spec = LaserStationSpecs(platform=LaserPlatformType.SPACE_BASED_ORBITAL, repetition_rate_hz=las_pwr * 10.0)
+        debris_spec = DebrisTargetSpecs(mass_kg=1.2, perigee_alt_km=450.0, apogee_alt_km=750.0)
+        las_res = simulate_laser_debris_engagement(laser=laser_spec, debris=debris_spec, engagement_duration_s=las_dur)
+
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Plazma Ablasyon Geri Tepme İtkisi (Δv)</div>
+            <div class="hud-val-emerald">{las_res.delta_v_m_s*1000:.2f} mm/s</div>
+            <small style="color:#94a3b8;">Perije Düşüşü: <b>{las_res.perigee_drop_km*1000:.1f} m</b> | Parçalanma Riski: <b>%{las_res.fragmentation_risk_score*100:.2f}</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
 # ==========================================
 # SEKME 8: VLEO ADAPTİF DRAG MAKE-UP
 # ==========================================
@@ -654,6 +724,36 @@ with t_deorbit:
         fig_pn.add_trace(go.Scatter(x=[PN_GEO["longitude_deg"]], y=[PN_GEO["latitude_deg"]], mode="markers+text", marker=dict(size=12, color="#f43f5e", symbol="star"), text=["Point Nemo"], textposition="top center", name="Hedef Merkez"))
         fig_pn.update_layout(title="Point Nemo Zemin Çarpma Dağılımı (WGS84)", xaxis_title="Boylam (°)", yaxis_title="Enlem (°)", template="plotly_dark", height=350)
         st.plotly_chart(fig_pn, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("⏱️ Uzun Vadeli Yörünge Ömrü & FCC 5-Yıl / NASA 25-Yıl Kuralı Denetimi")
+    st.caption("11 yıllık güneş aktivitesi çevrimleri altında balistik katsayı ve dinamik atmosferik ölçek yüksekliği ile yörünge bozunumu.")
+
+    life_c1, life_c2 = st.columns([1, 2])
+    with life_c1:
+        decay_init_alt = st.slider("Başlangıç Görev İrtifası (km):", 250.0, 750.0, float(satellite["altitude_km"]), step=10.0)
+        decay_res = simulate_orbit_decay(altitude_km=decay_init_alt, mass_kg=satellite["mass_kg"], drag_area_m2=satellite["area_m2"])
+
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Tahmini Doğal Yörünge Ömrü</div>
+            <div class="{'hud-val-emerald' if decay_res.fcc_5year_compliant else ('hud-val-amber' if decay_res.nasa_25year_compliant else 'hud-val-rose')}">
+                {decay_res.estimated_lifetime_years:.2f} Yıl
+            </div>
+            <small style="color:#94a3b8;">
+                FCC 5-Yıl Kuralı: <b>{'UYUMLU' if decay_res.fcc_5year_compliant else 'UYUMSUZ (İtki Şart)'}</b><br>
+                NASA 25-Yıl Kuralı: <b>{'UYUMLU' if decay_res.nasa_25year_compliant else 'UYUMSUZ'}</b>
+            </small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with life_c2:
+        fig_decay = go.Figure()
+        fig_decay.add_trace(go.Scatter(x=decay_res.time_series_years, y=decay_res.altitude_series_km, mode="lines", line=dict(color="#38bdf8", width=3), name="İrtifa Bozunum Eğrisi"))
+        fig_decay.add_vline(x=5.0, line_dash="dash", line_color="#10b981", annotation_text="FCC 5-Yıl Eşiği", annotation_position="top right")
+        fig_decay.add_vline(x=25.0, line_dash="dash", line_color="#f59e0b", annotation_text="NASA 25-Yıl Sınırı", annotation_position="top right")
+        fig_decay.update_layout(title="Zamana Bağlı Yörünge İrtifa Bozunumu & Atmosfere Giriş", xaxis_title="Zaman (Yıl)", yaxis_title="İrtifa (km)", template="plotly_dark", height=320)
+        st.plotly_chart(fig_decay, use_container_width=True)
 
 # ==========================================
 # SEKME 11: CCSDS CDM & NASA ODAR

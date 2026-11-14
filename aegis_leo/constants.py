@@ -12,7 +12,10 @@ EARTH_FLATTENING: float = 1.0 / 298.257223563
 EARTH_POLAR_RADIUS_KM: float = 6356.7523   # Earth polar radius (km)
 EARTH_MU: float = 398600.4418              # Standard gravitational parameter (km^3 / s^2)
 EARTH_MU_SI: float = 3.986004418e14        # Standard gravitational parameter (m^3 / s^2)
+MU_EARTH_KM3_S2: float = EARTH_MU
+MU_EARTH_M3_S2: float = EARTH_MU_SI
 EARTH_J2: float = 1.08262668e-3            # Earth J2 zonal harmonic (oblateness)
+J2_EARTH: float = EARTH_J2
 EARTH_ROTATION_RATE_RAD_S: float = 7.292115e-5  # Earth rotation rate (rad/s)
 
 # Standard Atmosphere & Drag Reference Parameters
