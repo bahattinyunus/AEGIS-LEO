@@ -327,15 +327,15 @@ def serve_dashboard():
                 <span class="inline-block w-4 h-4 rounded-full bg-cyan-400 animate-pulse"></span>
                 <div>
                     <h1 class="text-xl font-bold tracking-wider text-cyan-400 glow-cyan">AEGIS-LEO</h1>
-                    <p class="text-xs text-slate-400">Autonomous Edge-AI & Physics-Informed Orbital Safety Shield | NASA Space Apps 2026</p>
+                    <p class="text-xs text-slate-400">Otonom Uç Nokta Yapay Zekası & Fizik Bilgilendirmeli Yörünge Güvenlik Kalkanı | NASA Space Apps 2026</p>
                 </div>
             </div>
             <div class="flex items-center space-x-4 interactive">
                 <span id="storm-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-500">
-                    SPACE WEATHER: QUIET (Kp 1.3)
+                    UZAY HAVASI: SAKİN (Kp 1.3)
                 </span>
-                <a href="/docs" target="_blank" class="px-3 py-1 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-300 rounded text-xs border border-cyan-500/40 transition">API Docs</a>
-                <a href="/" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 transition">System Info</a>
+                <a href="/docs" target="_blank" class="px-3 py-1 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-300 rounded text-xs border border-cyan-500/40 transition">API Dokümantasyonu</a>
+                <a href="/" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 transition">Sistem Durumu</a>
             </div>
         </header>
 
@@ -344,38 +344,38 @@ def serve_dashboard():
             <!-- Left Panel: Satellite & Atmosphere -->
             <div class="glass-panel p-5 rounded-xl space-y-4 interactive">
                 <h2 class="text-sm font-semibold tracking-wider text-cyan-300 uppercase flex items-center justify-between">
-                    <span>Target Orbit Telemetry</span>
+                    <span>Hedef Yörünge Telemetrisi</span>
                     <span class="text-xs text-slate-400">Starlink-1007</span>
                 </h2>
                 <div class="space-y-2 text-xs">
                     <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span class="text-slate-400">Altitude</span>
+                        <span class="text-slate-400">İrtifa (Altitude)</span>
                         <span id="telemetry-alt" class="font-mono text-cyan-300 font-bold">548.0 km</span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span class="text-slate-400">Thermospheric Density (ρ)</span>
+                        <span class="text-slate-400">Termosferik Yoğunluk (ρ)</span>
                         <span id="telemetry-rho" class="font-mono text-emerald-400">2.41e-13 kg/m³</span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span class="text-slate-400">Drag Acceleration</span>
+                        <span class="text-slate-400">Sürüklenme İvmesi</span>
                         <span id="telemetry-drag" class="font-mono text-slate-200">1.24 µm/s²</span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span class="text-slate-400">Along-Track Ephemeris Error</span>
+                        <span class="text-slate-400">Boylamsal Sapma (Drift)</span>
                         <span id="telemetry-drift" class="font-mono text-yellow-400">+0.20 km</span>
                     </div>
                     <div class="flex justify-between py-1">
-                        <span class="text-slate-400">Propellant Budget</span>
+                        <span class="text-slate-400">İtici Gaz / Yakıt Bütçesi</span>
                         <span class="font-mono text-slate-200">15.4 kg (Isp: 250s)</span>
                     </div>
                 </div>
 
                 <div class="pt-3 border-t border-slate-800">
-                    <label class="text-xs text-slate-400 block mb-2 font-semibold">SPACE WEATHER STRESS TEST</label>
+                    <label class="text-xs text-slate-400 block mb-2 font-semibold">UZAY HAVASI STRES TESTİ</label>
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="triggerStorm('QUIET')" class="py-1.5 px-2 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Quiet (Kp 1.3)</button>
-                        <button onclick="triggerStorm('G4_SEVERE')" class="py-1.5 px-2 text-xs rounded bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-600">G4 Storm (Kp 8)</button>
-                        <button onclick="triggerStorm('G5_EXTREME')" class="col-span-2 py-1.5 px-2 text-xs rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-600 font-bold">G5 Superstorm (Kp 9)</button>
+                        <button onclick="triggerStorm('QUIET')" class="py-1.5 px-2 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Sakin (Kp 1.3)</button>
+                        <button onclick="triggerStorm('G4_SEVERE')" class="py-1.5 px-2 text-xs rounded bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-600">G4 Fırtına (Kp 8)</button>
+                        <button onclick="triggerStorm('G5_EXTREME')" class="col-span-2 py-1.5 px-2 text-xs rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-600 font-bold">G5 Süper Fırtına (Kp 9)</button>
                     </div>
                 </div>
             </div>
@@ -383,41 +383,41 @@ def serve_dashboard():
             <!-- Center Panel: 3D Callout / Status -->
             <div class="flex flex-col justify-end items-center pointer-events-none pb-4">
                 <div class="glass-panel p-4 rounded-xl text-center max-w-sm pointer-events-auto">
-                    <p class="text-xs text-cyan-400 tracking-wider font-semibold">ORBITAL CONJUNCTION WARNING</p>
-                    <p class="text-lg font-bold text-white mt-1">Cosmos 2251 Debris #125</p>
-                    <p class="text-xs text-slate-400">Miss Distance: <span id="miss-dist" class="text-rose-400 font-bold">450 meters</span></p>
+                    <p class="text-xs text-cyan-400 tracking-wider font-semibold">YÖRÜNGE YAKINLAŞMA ALARMI</p>
+                    <p class="text-lg font-bold text-white mt-1">Cosmos 2251 Enkaz Parçası #125</p>
+                    <p class="text-xs text-slate-400">En Yakın Geçiş: <span id="miss-dist" class="text-rose-400 font-bold">450 metre</span></p>
                 </div>
             </div>
 
             <!-- Right Panel: A-DRI & Autonomous AI Maneuver -->
             <div class="glass-panel p-5 rounded-xl space-y-4 interactive">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-sm font-semibold tracking-wider text-cyan-300 uppercase">A-DRI Risk Assessment</h2>
-                    <span id="adri-level" class="px-2 py-0.5 text-xs font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500">NOMINAL</span>
+                    <h2 class="text-sm font-semibold tracking-wider text-cyan-300 uppercase">A-DRI Risk Değerlendirmesi</h2>
+                    <span id="adri-level" class="px-2 py-0.5 text-xs font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500">NOMİNAL</span>
                 </div>
 
                 <div class="text-center py-2 bg-slate-900/60 rounded-lg border border-slate-800">
-                    <span class="text-xs text-slate-400 block">Unified A-DRI Index</span>
+                    <span class="text-xs text-slate-400 block">Birleşik A-DRI İndeksi</span>
                     <span id="adri-score" class="text-3xl font-extrabold text-cyan-400 font-mono">0.245</span>
-                    <span class="text-[10px] text-slate-500 block">NASA Threshold: 0.60 (Elevated) / 0.80 (Critical)</span>
+                    <span class="text-[10px] text-slate-500 block">NASA Eşiği: 0.60 (Yüksek) / 0.80 (Kritik)</span>
                 </div>
 
                 <div class="space-y-1 text-xs">
-                    <div class="flex justify-between"><span class="text-slate-400">Collision Prob (C_prob):</span><span id="cprob-val" class="font-mono">1.8e-05</span></div>
-                    <div class="flex justify-between"><span class="text-slate-400">Weather Uncertainty (W_drag):</span><span id="wdrag-val" class="font-mono">0.12</span></div>
-                    <div class="flex justify-between"><span class="text-slate-400">NASA ORDEM Density (D_ord):</span><span id="dord-val" class="font-mono">0.42</span></div>
-                    <div class="flex justify-between"><span class="text-slate-400">Fuel Feasibility (F_Δv):</span><span id="fdelta-val" class="font-mono">0.08</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Çarpışma Olasılığı (C_prob):</span><span id="cprob-val" class="font-mono">1.8e-05</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Uzay Havası Belirsizliği (W_drag):</span><span id="wdrag-val" class="font-mono">0.12</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">NASA ORDEM Enkaz Yoğunluğu:</span><span id="dord-val" class="font-mono">0.42</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Yakıt Fizibilitesi (F_Δv):</span><span id="fdelta-val" class="font-mono">0.08</span></div>
                 </div>
 
                 <div class="pt-3 border-t border-slate-800">
                     <button id="btn-evasion" onclick="executeAutonomousEvasion()" class="w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-900/50 transition">
-                        ⚡ Compute Autonomous Δv Evasion
+                        ⚡ Otonom Δv Kaçınmasını Hesapla
                     </button>
                     <div id="evasion-result" class="hidden mt-3 p-3 bg-slate-900/90 rounded border border-cyan-800 text-[11px] space-y-1">
-                        <div class="text-cyan-400 font-semibold">Autonomous Burn Calculated:</div>
-                        <div>Δv Burn: <span id="res-dv" class="text-emerald-400 font-mono font-bold">0.85 m/s</span></div>
-                        <div>Fuel Expended: <span id="res-fuel" class="text-slate-300 font-mono">0.088 kg</span> (Saved: <span id="res-saved" class="text-emerald-300 font-bold">28%</span>)</div>
-                        <div>Post-Burn A-DRI: <span id="res-post" class="text-emerald-400 font-mono font-bold">0.29 (Nominal)</span></div>
+                        <div class="text-cyan-400 font-semibold">Otonom Ateşleme Planlandı:</div>
+                        <div>Δv Ateşlemesi: <span id="res-dv" class="text-emerald-400 font-mono font-bold">0.85 m/s</span></div>
+                        <div>Harcanan Yakıt: <span id="res-fuel" class="text-slate-300 font-mono">0.088 kg</span> (Tasarruf: <span id="res-saved" class="text-emerald-300 font-bold">%28</span>)</div>
+                        <div>Yeni A-DRI: <span id="res-post" class="text-emerald-400 font-mono font-bold">0.29 (Nominal)</span></div>
                     </div>
                 </div>
             </div>
@@ -425,8 +425,8 @@ def serve_dashboard():
 
         <!-- Footer -->
         <footer class="flex justify-between items-center text-xs text-slate-500 glass-panel px-6 py-2 rounded-xl">
-            <div>Edge-AI Inference Core: <span class="text-cyan-400 font-mono">PINN INT8 Quantized (14.2 µs latency)</span></div>
-            <div>NASA Space Apps 2026 Ankara &bull; Team AYAZ &bull; Lead Architect: Bahattin Yunus Çetin</div>
+            <div>Uç Nokta Yapay Zeka Çekirdeği: <span class="text-cyan-400 font-mono">PINN INT8 Kuantize (14.2 µs gecikme)</span></div>
+            <div>NASA Space Apps 2026 Ankara &bull; AYAZ Takımı &bull; Lider Mimar: Bahattin Yunus Çetin</div>
         </footer>
     </div>
 

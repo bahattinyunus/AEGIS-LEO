@@ -29,33 +29,33 @@ from aegis_leo.data.catalog import get_satellite_by_id
 
 def run_demo():
     print("=" * 80)
-    print("🛰️  AEGIS-LEO: Autonomous Edge-AI & Physics-Informed Orbital Safety Shield")
-    print("   NASA Space Apps Challenge 2026 | Team AYAZ | Lead: Bahattin Yunus Çetin")
+    print("🛰️  AEGIS-LEO: Otonom Uç Nokta Yapay Zekası & Fizik Bilgilendirmeli Yörünge Güvenlik Kalkanı")
+    print("   NASA Space Apps Challenge 2026 | AYAZ Takımı | Lider Mimar: Bahattin Yunus Çetin")
     print("=" * 80)
 
-    # 1. Target Satellite
+    # 1. Hedef Uydu
     sat = get_satellite_by_id("STARLINK_LEO")
-    print(f"\n[1] TRACKED SATELLITE: {sat['name']} (NORAD #{sat['norad_id']})")
-    print(f"    - Type: {sat['type']}")
-    print(f"    - Orbit: Altitude {sat['altitude_km']} km, Inclination {sat['inclination_deg']}°")
-    print(f"    - Mass: {sat['mass_kg']} kg, Area: {sat['area_m2']} m², Propellant: {sat['remaining_propellant_kg']} kg")
+    print(f"\n[1] TAKİP EDİLEN UYDU: {sat['name']} (NORAD #{sat['norad_id']})")
+    print(f"    - Görev Türü: {sat['type']}")
+    print(f"    - Yörünge: İrtifa {sat['altitude_km']} km, Eğim {sat['inclination_deg']}°")
+    print(f"    - Kütle: {sat['mass_kg']} kg, Alan: {sat['area_m2']} m², Kalan Yakıt: {sat['remaining_propellant_kg']} kg")
 
-    # 2. Quiet Baseline
+    # 2. Sakin Uzay Havası Taban Değeri
     rho_quiet = compute_atmospheric_density(sat['altitude_km'], QUIET_KP, QUIET_F10_7)
-    print(f"\n[2] NOMINAL SPACE WEATHER (Quiet Baseline, Kp=1.3, F10.7=72)")
-    print(f"    - Base Thermospheric Density (ρ_0): {rho_quiet:.2e} kg/m³")
+    print(f"\n[2] NOMİNAL UZAY HAVASI (Sakin Taban Değer, Kp=1.3, F10.7=72)")
+    print(f"    - Taban Termosferik Yoğunluk (ρ_0): {rho_quiet:.2e} kg/m³")
 
-    # 3. Geomagnetic Storm Injection
+    # 3. Güneş Fırtınası Simülasyonu
     storm_kp = 8.0
     storm_f10_7 = 265.0
     rho_storm = compute_atmospheric_density(sat['altitude_km'], storm_kp, storm_f10_7)
     surge_ratio = rho_storm / rho_quiet
 
-    print(f"\n[3] ⚡ GEOMAGNETIC STORM INJECTION: NOAA G4 Severe Storm Event (Kp={storm_kp}, F10.7={storm_f10_7})")
-    print(f"    - Expanded Thermospheric Density (ρ_storm): {rho_storm:.2e} kg/m³")
-    print(f"    - Thermospheric Expansion Factor: +{surge_ratio:.1f}x times higher drag!")
+    print(f"\n[3] ⚡ GEOMANYETİK FIRTINA ETKİSİ: NOAA G4 Şiddetli Güneş Fırtınası (Kp={storm_kp}, F10.7={storm_f10_7})")
+    print(f"    - Genleşen Termosferik Yoğunluk (ρ_fırtına): {rho_storm:.2e} kg/m³")
+    print(f"    - Termosferik Genleşme Oranı: +{surge_ratio:.1f}x kat daha fazla sürtünme!")
 
-    # 4. Unmodeled Drag & Ephemeris Divergence
+    # 4. Modellenemeyen Sürüklenme ve Yörünge Sapması
     r0, v0 = kepler_to_cartesian(
         a_km=6378.137 + sat['altitude_km'],
         ecc=0.0001,
@@ -69,14 +69,14 @@ def run_demo():
         r0=r0, v0=v0, duration_hours=36.0, step_seconds=120.0, storm_kp=storm_kp, storm_f10_7=storm_f10_7
     )
 
-    print(f"\n[4] 36-HOUR EPHEMERIS PROPAGATION DIVERGENCE:")
-    print(f"    - Nominal Predicted Altitude Decay: {divergence['quiet_altitude_decay_m']:.1f} meters")
-    print(f"    - Storm-Induced Altitude Decay:     {divergence['storm_altitude_decay_m']:.1f} meters")
-    print(f"    - Net Unmodeled Decay:              {divergence['net_decay_meters']:.1f} meters")
-    print(f"    - Along-Track Position Drift:       +{divergence['along_track_displacement_km']:.2f} km")
-    print(f"    ⚠️  Static Conjunction Data Messages (CDMs) are INVALIDATED by ephemeris drift!")
+    print(f"\n[4] 36 SAATLİK YÖRÜNGE SAPMASI VE İRTİFA KAYBI:")
+    print(f"    - Nominal Beklenen İrtifa Kaybı:     {divergence['quiet_altitude_decay_m']:.1f} metre")
+    print(f"    - Fırtına Kaynaklı İrtifa Kaybı:    {divergence['storm_altitude_decay_m']:.1f} metre")
+    print(f"    - Modellenememiş Ek İrtifa Kaybı:   {divergence['net_decay_meters']:.1f} metre")
+    print(f"    - Boylamsal Yörünge Sapması:        +{divergence['along_track_displacement_km']:.2f} km")
+    print(f"    ⚠️  Statik Yakınlaşma Mesajları (CDM) yörünge kayması nedeniyle GEÇERSİZ kaldı!")
 
-    # 5. Risk Assessment (A-DRI)
+    # 5. Risk Değerlendirmesi (A-DRI)
     calc = ADRICalculator()
     pre_risk = calc.evaluate_risk(
         miss_distance_km=0.45,
@@ -90,15 +90,15 @@ def run_demo():
         remaining_propellant_kg=sat['remaining_propellant_kg'],
     )
 
-    print(f"\n[5] REAL-TIME A-DRI RISK EVALUATION:")
-    print(f"    - Collision Probability (C_prob): {pre_risk['components']['c_prob_raw']:.2e}")
-    print(f"    - Space Weather Uncertainty (W_drag): {pre_risk['components']['w_drag']:.2f}")
-    print(f"    - NASA ORDEM Debris Density (D_ord): {pre_risk['components']['d_ord']:.2f}")
-    print(f"    - Fuel Feasibility Index (F_Δv): {pre_risk['components']['f_delta_v']:.2f}")
-    print(f"    >>> COMPOSITE A-DRI SCORE: {pre_risk['a_dri']:.3f} [{pre_risk['risk_level']}] <<<")
-    print(f"    - Action Command: {pre_risk['action_command']}")
+    print(f"\n[5] GERÇEK ZAMANLI A-DRI RİSK DEĞERLENDİRMESİ:")
+    print(f"    - Çarpışma Olasılığı (C_prob):      {pre_risk['components']['c_prob_raw']:.2e}")
+    print(f"    - Uzay Havası Belirsizliği (W_drag): {pre_risk['components']['w_drag']:.2f}")
+    print(f"    - NASA ORDEM Enkaz Yoğunluğu (D_ord): {pre_risk['components']['d_ord']:.2f}")
+    print(f"    - Yakıt Fizibilite İndeksi (F_Δv):  {pre_risk['components']['f_delta_v']:.2f}")
+    print(f"    >>> BİRLEŞİK A-DRI SKORU: {pre_risk['a_dri']:.3f} [{pre_risk['risk_level']}] <<<")
+    print(f"    - Önerilen Eylem Komutu: {pre_risk['action_command']}")
 
-    # 6. Autonomous Edge-AI Avoidance Optimizer
+    # 6. Otonom Uç Nokta Kaçınma Optimize Edici
     optimizer = EdgeManeuverOptimizer(
         satellite_mass_kg=sat['mass_kg'],
         fuel_remaining_kg=sat['remaining_propellant_kg'],
@@ -119,25 +119,25 @@ def run_demo():
     rb = plan['reactive_baseline']
     eff = plan['efficiency_metrics']
 
-    print(f"\n[6] 🚀 AUTONOMOUS EDGE-AI MANEUVER OPTIMIZER:")
-    print(f"    - Recommended Action: {pb['strategy']}")
-    print(f"    - Planned Phasing Burn Δv:     {pb['delta_v_m_s']:.3f} m/s")
-    print(f"    - Propellant Consumption:      {pb['propellant_consumed_kg']:.4f} kg")
-    print(f"    - Post-Burn Separation:        {pb['resulting_separation_km']:.2f} km (SAFE)")
-    print(f"    - New A-DRI Risk Score:        {pb['post_burn_adri']:.3f} [{pb['post_burn_risk_level']}]")
-    print(f"    - Comparative Fuel Savings:    {eff['fuel_savings_percentage']}% less fuel than late reactive burn ({eff['propellant_saved_kg']:.4f} kg saved)")
-    print(f"    - Total Risk Reduction:        {eff['risk_reduction_percentage']}%")
+    print(f"\n[6] 🚀 OTONOM UÇ NOKTA YAPAY ZEKA KAÇINMA MOTORU:")
+    print(f"    - Önerilen Strateji:         {pb['strategy']}")
+    print(f"    - Planlanan Fazlama Δv Yanması: {pb['delta_v_m_s']:.3f} m/s")
+    print(f"    - Harcanan İtici Gaz:          {pb['propellant_consumed_kg']:.4f} kg")
+    print(f"    - Yanma Sonrası Geçiş Mesafesi: {pb['resulting_separation_km']:.2f} km (GÜVENLİ)")
+    print(f"    - Yeni A-DRI Risk Skoru:       {pb['post_burn_adri']:.3f} [{pb['post_burn_risk_level']}]")
+    print(f"    - Kıyaslamalı Yakıt Tasarrufu: %{eff['fuel_savings_percentage']} (Geç reaktif manevraya kıyasla {eff['propellant_saved_kg']:.4f} kg tasarruf)")
+    print(f"    - Toplam Risk İndirgeme:       %{eff['risk_reduction_percentage']}")
 
-    # 7. Edge Quantization Benchmark
+    # 7. Uç Nokta Donanım Performansı
     model = get_pretrained_edge_pinn()
     bench = benchmark_edge_inference(model, num_iterations=200)
-    print(f"\n[7] 🧠 ONBOARD EDGE PROCESSOR PROFILING:")
-    print(f"    - Parameter Count: {bench['parameter_count']} weights")
-    print(f"    - INT8 Memory Footprint: {bench['int8_quantized_memory_kb']} KB")
-    print(f"    - Inference Latency: {bench['latency_microseconds']:.1f} microseconds")
-    print(f"    - Edge Radiation-Tolerant OBC Status: {bench['flight_readiness']}")
+    print(f"\n[7] 🧠 UÇUŞ BİLGİSAYARI (ONBOARD OBC) PERFORMANSI:")
+    print(f"    - Ağırlık/Parametre Sayısı:    {bench['parameter_count']} parametre")
+    print(f"    - INT8 Bellek Ayak İzi:        {bench['int8_quantized_memory_kb']} KB")
+    print(f"    - Çıkarım (Inference) Gecikmesi: {bench['latency_microseconds']:.1f} mikrosaniye")
+    print(f"    - Uçuş Donanımı Test Durumu:   {bench['flight_readiness']}")
 
-    # 8. NASA-STD-8719.14 Compliance Audit
+    # 8. NASA-STD-8719.14 Denetimi
     auditor = NASAComplianceAuditor()
     audit = auditor.audit_mission(
         mission_name=sat['name'],
@@ -146,16 +146,16 @@ def run_demo():
         inclination_deg=sat['inclination_deg'],
         mass_kg=sat['mass_kg'],
         area_m2=sat['area_m2'],
-        operational_collision_prob=1.2e-5,  # post-maneuver safe Pc
+        operational_collision_prob=1.2e-5,
         has_passivation_valves=True,
     )
-    print(f"\n[8] 📋 NASA-STD-8719.14 COMPLIANCE AUDIT:")
-    print(f"    - Status: {audit['overall_status']}")
+    print(f"\n[8] 📋 NASA-STD-8719.14 UYUMLULUK DENETİMİ:")
+    print(f"    - Genel Uyum Durumu: {audit['overall_status']}")
     for item in audit['compliance_details']:
         print(f"      [{item['status']}] {item['standard_id']}: {item['title']}")
 
     print("\n" + "=" * 80)
-    print("✅ SIMULATION COMPLETE: All physical, AI, and regulatory requirements validated.")
+    print("✅ SİMÜLASYON TAMAMLANDI: Tüm fizik, yapay zeka ve regülasyon testleri doğrulandı.")
     print("=" * 80)
 
 

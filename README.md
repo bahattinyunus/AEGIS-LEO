@@ -1,167 +1,166 @@
-# 🛡️ AEGIS-LEO: Autonomous Edge-AI & Physics-Informed Orbital Safety Shield
+# 🛡️ AEGIS-LEO: Otonom Uç Nokta Yapay Zekası ve Fizik Bilgilendirmeli Yörünge Güvenlik Kalkanı
 
 [![NASA Space Apps 2026](https://img.shields.io/badge/NASA%20Space%20Apps-2026%20Ankara-0B3D91.svg)](https://www.spaceappschallenge.org/)
-[![Team](https://img.shields.io/badge/Team-AYAZ-orange.svg)]()
+[![Takım](https://img.shields.io/badge/Takım-AYAZ-orange.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)]()
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg?logo=streamlit&logoColor=white)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **"Protecting Low Earth Orbit by bridging Space Weather Physics, Orbital Mechanics, and Autonomous Edge-AI."**
+> **"Uzay Havası Fiziği, Yörünge Mekaniği ve Otonom Uç Nokta Yapay Zekasını Birleştirerek Alçak Dünya Yörüngesini (LEO) Koruyoruz."**
 
-**AEGIS-LEO** is an end-to-end orbital risk intelligence and autonomous collision avoidance platform developed by **Team AYAZ** for the **NASA Space Apps Challenge 2026**. It addresses the critical blind spot in modern space situational awareness: **sudden thermospheric expansion caused by geomagnetic storms**, which induces unexpected atmospheric drag, along-track ephemeris divergence, invalidates static Conjunction Data Messages (CDMs), and accelerates the Kessler Syndrome.
+**AEGIS-LEO**, **NASA Space Apps Challenge 2026** için **AYAZ Takımı** tarafından geliştirilen uçtan uca yörünge risk istihbaratı ve otonom çarpışma önleme simülasyon platformudur. Mevcut uzay durumsal farkındalık (SSA) sistemlerindeki en kritik kör noktayı çözer: **Geomanyetik fırtınaların tetiklediği ani termosferik genleşme**, öngörülemeyen atmosferik sürüklenmeye yol açar, statik Yakınlaşma Veri Mesajlarını (CDM) geçersiz kılar ve Kessler Sendromu riskini katlar.
 
 ---
 
-## ⚡ Key Innovations
+## ⚡ Temel İnovasyonlar
 
-### 1. Physics-Informed Thermospheric Drag Model
-Using solar wind and geomagnetic parameters from **NASA OMNIWeb** and **NOAA SWPC**, AEGIS-LEO models sudden fluctuations in upper-atmosphere density ($\rho$) during solar storms ($K_p \ge 5$). It calculates real-time drag acceleration perturbations:
+### 1. Fizik Bilgilendirmeli Termosferik Sürüklenme Modeli
+**NASA OMNIWeb** ve **NOAA SWPC** güneş rüzgarı ile jeomanyetik parametrelerini kullanan AEGIS-LEO, güneş fırtınaları ($K_p \ge 5$) sırasında üst atmosfer yoğunluğundaki ($\rho$) ani dalgalanmaları ve sürüklenme ivmesi sapmalarını anlık olarak modeller:
 
 $$a_{drag} = -\frac{1}{2} \rho(h, K_p, F_{10.7}) \left(\frac{C_d A}{m}\right) v_{rel}^2 \hat{v}_{rel}$$
 
-* Dynamic scaling coupled with planetary geomagnetic index ($K_p$) and 10.7 cm solar radio flux ($F_{10.7}$).
-* In G4/G5 events, thermospheric density expands by **3.5x to 7.6x**, inducing unmodeled along-track position shifts of over **14 to 26 km** within 36 hours.
+* Gezegensel jeomanyetik fırtına indeksi ($K_p$) ve 10.7 cm güneş radyo akısı ($F_{10.7}$) ile dinamik ölçekleme.
+* G4/G5 fırtınalarında termosfer yoğunluğu **3.5x ila 7.6x kat** genleşir; bu durum 36 saat içinde **14 ila 26 km** arasında modellenememiş boylamsal yörünge kaymalarına (along-track drift) sebep olur.
 
-### 2. Adaptive Debris & Drag Risk Index (A-DRI)
-A unified, real-time risk index ($0.0 \to 1.0$) continuously evaluated for tracked assets:
+### 2. Uyarlanabilir Enkaz ve Sürüklenme Risk İndeksi (A-DRI)
+Takip edilen her LEO uydusu ve uzay aracı için gerçek zamanlı hesaplanan birleşik risk metriği ($0.0 \to 1.0$):
 
 $$\text{A-DRI} = w_1 C_{prob} + w_2 W_{drag} + w_3 D_{ord} + w_4 F_{\Delta v}$$
 
-* **$C_{prob}$ ($w_1 = 0.40$):** Conjunction collision probability derived from 3D-to-2D encounter B-plane covariance projection.
-* **$W_{drag}$ ($w_2 = 0.25$):** Space weather orbital uncertainty ballooning from Area-to-mass ($A/m$) and solar storm expansion.
-* **$D_{ord}$ ($w_3 = 0.20$):** Altitude & inclination spatial debris density calibrated against **NASA ORDEM 3.1** and ESA MASTER models.
-* **$F_{\Delta v}$ ($w_4 = 0.15$):** Propellant feasibility index penalizing late high-$\Delta v$ expenditures vs remaining fuel margins.
+* **$C_{prob}$ ($w_1 = 0.40$):** 3D'den 2D karşılaşma B-düzlemine kovaryans izdüşümü ile hesaplanan taban çarpışma olasılığı.
+* **$W_{drag}$ ($w_2 = 0.25$):** Alan/kütle oranı ($A/m$) ve güneş fırtınası genleşmesinden kaynaklanan yörünge konumu belirsizliği.
+* **$D_{ord}$ ($w_3 = 0.20$):** **NASA ORDEM 3.1** ve ESA MASTER modelleriyle kalibre edilmiş irtifa ve eğim uzay enkazı yoğunluk faktörü.
+* **$F_{\Delta v}$ ($w_4 = 0.15$):** Kalan yakıt bütçesi ve geç kaçınma manevrası maliyetini cezalandıran yakıt fizibilite katsayısı.
 
-### 3. Autonomous Edge-AI Avoidance Optimizer
-Designed for radiation-tolerant onboard flight computers (e.g., NVIDIA Jetson / RT-OBC):
-* **Physics-Informed Neural Network (PINN):** Evaluates thermospheric drift and drag dissipation in **< 150 microseconds** at **< 10 KB INT8 footprint**.
-* **Autonomous Phasing & Altitude Burn Engine:** Employs the **Vis-Viva equation** and **Tsiolkovsky rocket equation** to plan proactive micro-burns ($\Delta v \approx 0.3 - 0.85\text{ m/s}$), achieving **28% to 88% propellant savings** over late reactive ground-commanded evasion maneuvers.
+### 3. Uç Nokta Yapay Zekası Otonom Kaçınma Motoru
+Radyasyon dayanımlı uçuş bilgisayarlarında (NVIDIA Jetson / Onboard RT-OBC) bağımsız çalışmak üzere tasarlanmıştır:
+* **Fizik Bilgilendirmeli Sinir Ağı (PINN):** Mekanik enerji korunumu ve sürüklenme kaybı kısıtlarıyla, termosferik sapmayı **< 150 mikrosaniyede** ve **< 10 KB INT8 bellek** alanında hesaplar.
+* **Otonom Fazlama ve İrtifa Motoru:** **Vis-Viva denklemi** ve **Tsiolkovsky roket denklemini** kullanarak erken proaktif mikro ateşlemeler ($\Delta v \approx 0.3 - 0.85\text{ m/s}$) planlar; yer istasyonundan komut beklenen geç reaktif manevralara kıyasla **%88'e varan yakıt tasarrufu** sağlar.
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Sistem Mimarisi
 
 ```text
 ┌─────────────────────────────────┐        ┌─────────────────────────────────┐
 │     NASA OMNIWeb / NOAA SWPC    │        │      Space-Track TLE / CDM      │
-│  (Solar Wind, Kp, F10.7, Ap)    │        │  (Orbital Ephemeris & Covariance)│
+│  (Güneş Rüzgarı, Kp, F10.7, Ap) │        │   (Yörünge Konumu & Kovaryans)  │
 └────────────────┬────────────────┘        └────────────────┬────────────────┘
                  │                                          │
                  ▼                                          ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                 Physics-Informed Orbital & Drag Engine                     │
-│        (Cowell RK4 + J2 Perturbation + NRLMSISE Thermospheric Model)       │
+│               Fizik Bilgilendirmeli Yörünge & Sürüklenme Motoru            │
+│          (Cowell RK4 + J2 Basıklığı + NRLMSISE Termosfer Modeli)           │
 └─────────────────────────────────────┬──────────────────────────────────────┘
                                       │
                                       ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                    A-DRI Risk Engine & Edge Optimizer                      │
-│            (B-Plane Covariance Projection + Vis-Viva Phasing)              │
-│            [Radiation-Tolerant Onboard PINN Core - INT8 Ready]             │
+│                    A-DRI Risk Motoru & Uç Nokta Optimize Edici             │
+│            (B-Düzlemi Kovaryans İzdüşümü + Vis-Viva Fazlaması)             │
+│             [Radyasyon Dayanımlı Uçuş PINN Çekirdeği - INT8 Hazır]         │
 └─────────────────────────────────────┬──────────────────────────────────────┘
                                       │
                  ┌────────────────────┴────────────────────┐
                  ▼                                         ▼
 ┌─────────────────────────────────┐       ┌─────────────────────────────────┐
-│  3D Interactive Mission Control │       │   NASA-STD-8719.14 Compliance   │
-│  (Streamlit 3D Globe + FastAPI) │       │   Automated Audit & ODAR Report │
+│   3D İnteraktif Görev Kontrol   │       │   NASA-STD-8719.14 Uyumluluk    │
+│  (Streamlit 3D Küre + FastAPI)  │       │   Otomatik Denetim & ODAR Raporu│
 └─────────────────────────────────┘       └─────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Hızlı Başlangıç
 
-### 1. Prerequisites & Installation
+### 1. Gereksinimler & Kurulum
 
-Clone repository and install dependencies:
+Repoyu klonlayın ve bağımlılıkları yükleyin:
 ```bash
 git clone https://github.com/bahattinyunus/AEGIS-LEO.git
 cd AEGIS-LEO
 
-# Install requirements
+# Gerekli kütüphaneleri yükleyin
 pip install -r requirements.txt
 ```
 
-### 2. Launch Interactive 3D Streamlit Simulator
-The quickest way to explore the full 3D visualizer, satellite selector, and live storm simulation:
+### 2. 3D İnteraktif Simülatörü Başlatın (Streamlit)
+Görsel 3D Dünya küresi, uydu seçimi ve fırtına simülasyonunu başlatmak için:
 ```bash
 streamlit run app.py
 ```
-* **Interactive 3D Earth:** Visualizes satellite orbit, space debris cloud, and post-maneuver evasive trajectories.
-* **1-Click Storm Injection:** Witness density jump from quiet to G4/G5 conditions and A-DRI turn Critical red.
-* **1-Click Autonomous Burn:** Computes optimal $\Delta v$ micro-burn, calculates saved propellant, and restores Nominal green safety.
+* **Etkileşimli 3D Dünya:** Uydu yörüngesini, enkaz bulutunu ve manevra sonrası güvenli rotayı çizer.
+* **Tek Tıkla Güneş Fırtınası:** Termosferik yoğunluğun fırlamasını ve A-DRI skorunun kırmızıya (CRITICAL) dönüşünü izleyin.
+* **Tek Tıkla Otonom Kaçınma:** Optimum $\Delta v$ mikro ateşlemesini hesaplar, tasarruf edilen yakıtı gösterir ve riski yeşile (NOMINAL) çeker.
 
-### 3. Launch FastAPI Mission Control & 3D Web HUD
-Run the production-grade REST API backend with embedded Three.js HUD:
+### 3. FastAPI Görev Kontrol & 3D Web HUD
+REST API ve Three.js arayüzünü çalıştırmak için:
 ```bash
 uvicorn backend.main:app --reload --port 8000
 ```
-* **Interactive Web HUD:** Open [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
-* **Interactive Swagger API Docs:** Open [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Web Arayüzü (HUD):** [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
+* **Otomatik Swagger API Dokümantasyonu:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 4. Run Automated Demo & Verification
-Run the terminal demonstration with zero GUI dependencies:
+### 4. Terminal Simülasyonu & Doğrulama
+Grafik arayüz olmadan komut satırından uçtan uca simülasyonu çalıştırmak için:
 ```bash
 python demo_script.py
 ```
 
-### 5. Run Test Suite
-Validate all physics, astrodynamics, A-DRI risk models, and API endpoints:
+### 5. Test Paketini Çalıştırın
+Tüm fizik, yörünge mekaniği, yapay zeka ve API uçlarını test etmek için:
 ```bash
 pytest -v
 ```
 
 ---
 
-## 📊 Case Study: Geomagnetic Storm Stress Test (NOAA G4/G5 Event)
+## 📊 Vaka Analizi: NOAA G4/G5 Güneş Fırtınası Stres Testi
 
-Simulating a 548 km Sun-Synchronous LEO satellite ($A/m = 0.0085 - 0.02\text{ m}^2/\text{kg}$) during a G4 severe geomagnetic storm:
+548 km irtifada Güneş Eşzamanlı (SSO) bir LEO uydusu ($A/m = 0.0085 - 0.02\text{ m}^2/\text{kg}$) için G4 şiddetli jeomanyetik fırtına simülasyonu:
 
-| Metric | Without AEGIS-LEO (Static CDM) | With AEGIS-LEO (Autonomous Shield) | Improvement |
+| Metrik | AEGIS-LEO Olmadan (Statik CDM) | AEGIS-LEO İle (Otonom Kalkan) | Kazanım / Fark |
 | :--- | :---: | :---: | :---: |
-| **Thermospheric Density ($\rho$)** | Baseline ($2.45 \times 10^{-13}\text{ kg/m}^3$) | Dynamic Surge ($1.44 \times 10^{-12}\text{ kg/m}^3$) | Real-Time Physical Awareness |
-| **36-Hour Altitude Decay** | $10.52\text{ km}$ (expected) | $10.67\text{ km}$ (actual) | $+151\text{ m}$ unmodeled decay |
-| **Along-Track Ephemeris Shift** | $0.0\text{ km}$ (assumed) | **$+16.72\text{ km}$** (actual) | Drift Captured & Compensated |
-| **A-DRI Risk Level** | Blind / Outdated ($P_c$ unknown) | **0.449 $\to$ 0.842 (CRITICAL)** | Immediate Conjunction Alarm |
-| **Avoidance Maneuver Type** | Late Reactive Emergency Evasion | **Autonomous Proactive Micro-Burn** | Early Orbital Phasing |
-| **Burn Cost ($\Delta v$)** | $2.80\text{ m/s}$ | **$0.325 - 0.850\text{ m/s}$** | **Up to 88% Propellant Saved** |
-| **Post-Burn Risk (A-DRI)** | High Fuel Depletion Penalty | **0.146 (NOMINAL)** | Mission Extended & Compliant |
+| **Termosferik Yoğunluk ($\rho$)** | Taban Değer ($2.45 \times 10^{-13}\text{ kg/m}^3$) | Dinamik Fırtına ($1.44 \times 10^{-12}\text{ kg/m}^3$) | Gerçek Zamanlı Fizik Farkındalığı |
+| **36 Saatlik İrtifa Kaybı** | $10.52\text{ km}$ (tahmin edilen) | $10.67\text{ km}$ (gerçekleşen) | $+151\text{ m}$ ek sürtünme kaybı |
+| **Boylamsal Yörünge Kayması** | $0.0\text{ km}$ (varsayılan) | **$+16.72\text{ km}$** (gerçekleşen) | Sapma Tespit Edildi & Düzeltildi |
+| **A-DRI Risk Seviyesi** | Kör / Statik ($P_c$ geçersiz) | **0.449 $\to$ 0.842 (KRİTİK)** | Anında Çarpışma Alarmı |
+| **Kaçınma Manevrası Türü** | Geç Reaktif Acil Durum Kaçınması | **Otonom Erken Fazlama Mikro Ateşlemesi** | Proaktif Yörünge Düzeltme |
+| **Ateşleme Maliyeti ($\Delta v$)** | $2.80\text{ m/s}$ | **$0.325 - 0.850\text{ m/s}$** | **%88'e Varan Yakıt Tasarrufu** |
+| **Manevra Sonrası Risk (A-DRI)** | Yüksek Yakıt Tüketim Cezası | **0.146 (NOMİNAL)** | Görev Ömrü Korundu & Uyum Sağlandı |
 
 ---
 
-## 📋 NASA-STD-8719.14 Compliance Engine
+## 📋 NASA-STD-8719.14 Uyumluluk Motoru
 
-AEGIS-LEO incorporates automated compliance auditing for **NASA Technical Standard NASA-STD-8719.14** (*Process for Limiting Orbital Debris*):
-* **Req 4.3:** Debris released during normal operations.
-* **Req 4.4:** Accidental explosions and passivation integrity.
-* **Req 4.5:** Postmission orbital lifetime ($\le 25$ years NASA rule, $\le 5$ years modern FCC rule).
-* **Req 4.6:** Operational collision probability ($P_c < 10^{-4}$ threshold).
-* **Automated ODAR Generator:** Generates compliant Orbital Debris Assessment Reports (.md / JSON).
-
----
-
-## 🇹🇷 Hızlı Uygulama & Sunum Rehberi (Team AYAZ)
-
-1. **Canlı MVP:** Projeyi `streamlit run app.py` komutuyla yerel makinenizde çalıştırabilir veya Streamlit Community Cloud / Vercel üzerine GitHub reposunu bağlayarak anında canlı bağlantı elde edebilirsiniz.
-2. **Ekran Kaydı & Demo:**
-   - Arayüzde hedef uyduyu seçin (örneğin Starlink-1007 veya Sentinel-1A).
-   - **"⚡ Güneş Fırtınası Simüle Et"** butonuna basarak termosferik yoğunluğun fırladığını, boylamsal sapmanın ($+16\text{ km}$) oluştuğunu ve A-DRI skorunun kırmızıya (CRITICAL) döndüğünü gösterin.
-   - **"🚀 Otonom $\Delta v$ Kaçınma Hesapla"** butonuna tıklayarak otonom sistemin küçük bir mikro ateşlemeyle ($\Delta v = 0.325\text{ m/s}$) uydunun rotasını nasıl düzelttiğini ve yakıt tasarrufunu (%88) kanıtlayın.
-   - **"📋 NASA-STD-8719.14 Denetle"** butonundan otomatik ODAR denetim raporunu indirin.
+AEGIS-LEO, **NASA-STD-8719.14** (*Yörünge Enkazını Sınırlama Süreci*) teknik standardı için otomatik denetim ve raporlama sağlar:
+* **Madde 4.3:** Normal operasyonlar sırasında serbest bırakılan enkaz sınırları.
+* **Madde 4.4:** Kaza sonucu patlama riski ve pasivasyon (yakıt/batarya deşarjı) kabiliyeti.
+* **Madde 4.5:** Görev sonrası yörünge ömrü ($\le 25$ yıl NASA kuralı, $\le 5$ yıl güncel FCC kuralı).
+* **Madde 4.6:** Operasyonel çarpışma olasılığı limiti ($P_c < 10^{-4}$ eşiği).
+* **Otomatik ODAR Rapor Üreticisi:** Standartlara tam uyumlu Yörünge Enkazı Değerlendirme Raporu (.md / JSON).
 
 ---
 
-## 👥 Team AYAZ
+## 🇹🇷 30 Saniyelik Hızlı Demo & Sunum Adımları
 
-Developed with passion in **Ankara, Türkiye** for **NASA Space Apps Challenge 2026**.
-
-* **Bahattin Yunus Çetin** ([@bahattinyunus](https://github.com/bahattinyunus)) - *Lead Systems, Orbital Mechanics & Edge-AI Architect*
+1. **Simülatörü Başlatın:** Terminalde `streamlit run app.py` komutunu çalıştırın.
+2. **Hedef Uyduyu Seçin:** Kenar çubuğundan Starlink-1007 veya Sentinel-1A'yı seçin.
+3. **Fırtınayı Başlatın:** **"⚡ Güneş Fırtınası Simüle Et"** butonuna basın; termosferik yoğunluğun fırladığını, $+16\text{ km}$ yörünge sapmasını ve A-DRI skorunun kırmızıya (CRITICAL) döndüğünü gösterin.
+4. **Otonom Kaçınmayı Çalıştırın:** **"🚀 Otonom Δv Kaçınma Hesapla"** butonuna tıklayarak uç nokta yapay zekasının mikrosaniyeler içinde mikro ateşlemeyi ($\Delta v = 0.325\text{ m/s}$) hesaplayıp yörüngeyi düzelttiğini ve %88 yakıt tasarrufu sağladığını sergileyin.
+5. **Denetim Raporunu İndirin:** **"📋 NASA-STD-8719.14 Denetle"** butonundan resmi ODAR raporunu indirin.
 
 ---
 
-## 📜 License
+## 👥 AYAZ Takımı
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+**NASA Space Apps Challenge 2026** Ankara etabı için tutkuyla geliştirilmiştir.
+
+* **Bahattin Yunus Çetin** ([@bahattinyunus](https://github.com/bahattinyunus)) - *Lider Sistem, Yörünge Mekaniği ve Uç Nokta Yapay Zeka Mimarı*
+
+---
+
+## 📜 Lisans
+
+Bu proje **MIT Lisansı** ile lisanslanmıştır - ayrıntılar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
