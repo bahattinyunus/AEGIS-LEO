@@ -5,6 +5,21 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-11-14
+
+### Added
+- **Grand Agent Army Wave 2 Expansion (9 Additional Autonomous Specialist Agents)**:
+  - `nav-worker` (`aegis_leo/navigation/sensor_fusion.py`): Extended Kalman Filter (EKF) and Unscented Kalman Filter (UKF) for onboard Autonomous Orbit Determination (AOD) fusing Star Tracker LOS vectors, GNSS pseudoranges, and storm-adaptive magnetometers.
+  - `sensor-worker` (`aegis_leo/sensors/laser_radar.py`): Spaceborne LIDAR & Radar active sensor emulation with Swerling I-IV fluctuation models, Doppler radar, CFAR detection, and 2D Range-Doppler maps.
+  - `iod-worker` (`aegis_leo/navigation/iod_gauss.py`): Initial Orbit Determination (IOD) from optical angles-only tracks (Gauss, Laplace, Gibbs, and Herrick-Gibbs) with light-time travel correction.
+  - `mpc-worker` (`aegis_leo/ai/mpc_avoidance.py`): Model Predictive Control (MPC) and Sequential Convex Programming (SCP) with primal-dual interior-point QP solver for non-convex collision avoidance.
+  - `vleo-worker` (`aegis_leo/ai/drag_makeup.py`): Adaptive Drag Make-Up (ADMU) controller engine for VLEO (180-300 km) using L1 adaptive control and anti-windup PID against atmospheric density waves.
+  - `hcw-worker` (`aegis_leo/astrodynamics/cw_proximity.py`): Hill-Clohessy-Wiltshire (HCW) and Yamanaka-Ankersen elliptical relative motion for Active Debris Removal (ADR) rendezvous and Proximity Operations (RPO).
+  - `adr-worker` (`aegis_leo/adr/debris_capture.py`): Active Debris Removal (ADR) capture dynamics: 6-DOF robotic manipulator kinematics, harpoon tethered momentum exchange, and upper stage detumbling.
+  - `cdm-worker` (`aegis_leo/data/ccsds_cdm_xml.py`): Complete CCSDS 508.0-B-1 Conjunction Data Message (CDM) XML and KVN parser, schema validator, and astrodynamic verifier.
+  - `fed-worker` (`aegis_leo/ai/federated_swarm.py`): Federated Learning across satellite swarms (FedAvg and FedProx) via Inter-Satellite Links (ISL) with zero raw telemetry leakage and DP noise.
+- **Repository Test Suite Milestone**: All **329 unit and integration tests** passing with 100% success rate.
+
 ## [1.3.0] - 2026-11-14
 
 ### Added
