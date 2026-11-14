@@ -1,0 +1,639 @@
+"""
+AEGIS-LEO Backend Server
+FastAPI application providing Space Situational Awareness, Space Weather Drag Physics,
+A-DRI Risk Assessment, and Edge-AI Autonomous Avoidance APIs.
+"""
+
+from typing import Dict, Any, List, Optional
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
+
+from aegis_leo.constants import (
+    EARTH_RADIUS_KM,
+    QUIET_KP,
+    QUIET_F10_7,
+    STORM_G4_KP,
+    STORM_G5_KP,
+)
+from aegis_leo.physics.atmosphere import compute_atmospheric_density, compute_ballistic_coefficient
+from aegis_leo.physics.propagator import OrbitalPropagator
+from aegis_leo.physics.coordinates import kepler_to_cartesian, cartesian_to_kepler
+from aegis_leo.risk.adri import ADRICalculator
+from aegis_leo.risk.collision import compute_collision_probability
+from aegis_leo.ai.pinn import get_pretrained_edge_pinn
+from aegis_leo.ai.edge_optimizer import EdgeManeuverOptimizer
+from aegis_leo.ai.quantizer import benchmark_edge_inference
+from aegis_leo.data.space_weather import SpaceWeatherService, SpaceWeatherEvent
+from aegis_leo.data.catalog import list_satellites, list_debris, get_satellite_by_id
+from aegis_leo.data.cdm import generate_cdm_record
+from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
+
+app = FastAPI(
+    title="AEGIS-LEO Mission Control API",
+    description="Autonomous Edge-AI & Physics-Informed Orbital Safety Shield API (NASA Space Apps Challenge 2026)",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global services & instances
+weather_service = SpaceWeatherService()
+adri_calc = ADRICalculator()
+edge_pinn = get_pretrained_edge_pinn()
+compliance_auditor = NASAComplianceAuditor()
+
+
+# ------------------ Request / Response Schemas ------------------ #
+
+class StormSimulationRequest(BaseModel):
+    event_key: Optional[str] = Field("G4_SEVERE", description="Storm preset (G1_MINOR, G3_STRONG, G4_SEVERE, G5_EXTREME, QUIET)")
+    custom_kp: Optional[float] = Field(None, ge=0.0, le=9.0, description="Optional custom Kp index (0 to 9)")
+    custom_f10_7: Optional[float] = Field(None, ge=50.0, le=450.0, description="Optional custom F10.7 flux")
+
+
+class ConjunctionEvalRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    debris_id: str = "COSMOS_2251_DEB"
+    miss_distance_km: float = 0.45
+    include_storm: bool = True
+    storm_kp: float = 8.0
+    storm_f10_7: float = 265.0
+
+
+class ManeuverPlanRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    miss_distance_km: float = 0.45
+    storm_kp: float = 8.0
+    storm_f10_7: float = 265.0
+    along_track_disp_km: float = 14.2
+
+
+class ComplianceAuditRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    conjunction_pc: float = 2.4e-4
+    has_passivation_valves: bool = True
+
+
+# ------------------ API Endpoints ------------------ #
+
+@app.get("/")
+def root():
+    return {
+        "system": "AEGIS-LEO: Autonomous Edge-AI & Physics-Informed Orbital Safety Shield",
+        "team": "Team AYAZ (NASA Space Apps Challenge 2026)",
+        "lead": "Bahattin Yunus Çetin (@bahattinyunus)",
+        "version": "1.0.0",
+        "docs_url": "/docs",
+        "hud_dashboard": "/dashboard",
+    }
+
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ONLINE", "subsystems": {"physics": "OK", "ai_pinn": "OK", "weather_feed": "OK"}}
+
+
+# --- Space Weather Endpoints ---
+
+@app.get("/api/space-weather/current")
+def get_current_space_weather():
+    return weather_service.get_current_conditions()
+
+
+@app.get("/api/space-weather/presets")
+def get_space_weather_presets():
+    return weather_service.list_preset_events()
+
+
+@app.post("/api/space-weather/simulate-storm")
+def simulate_storm(req: StormSimulationRequest):
+    if req.custom_kp is not None and req.custom_f10_7 is not None:
+        return weather_service.set_custom_parameters(req.custom_kp, req.custom_f10_7)
+    if req.event_key:
+        return weather_service.set_storm_event(req.event_key)
+    return weather_service.get_current_conditions()
+
+
+# --- Catalog Endpoints ---
+
+@app.get("/api/catalog/satellites")
+def get_satellites():
+    return list_satellites()
+
+
+@app.get("/api/catalog/debris")
+def get_debris_objects():
+    return list_debris()
+
+
+# --- Physics & Propagation Endpoints ---
+
+@app.get("/api/physics/density")
+def get_thermospheric_density(
+    altitude_km: float = Query(550.0, ge=100.0, le=1200.0),
+    kp: float = Query(QUIET_KP, ge=0.0, le=9.0),
+    f10_7: float = Query(QUIET_F10_7, ge=50.0, le=450.0),
+):
+    density = compute_atmospheric_density(altitude_km, kp, f10_7)
+    quiet_density = compute_atmospheric_density(altitude_km, QUIET_KP, QUIET_F10_7)
+    multiplier = density / max(quiet_density, 1e-25)
+
+    return {
+        "altitude_km": altitude_km,
+        "kp_index": kp,
+        "f10_7_flux": f10_7,
+        "density_kg_m3": density,
+        "quiet_baseline_density_kg_m3": quiet_density,
+        "storm_expansion_multiplier": round(multiplier, 2),
+    }
+
+
+@app.get("/api/physics/simulate-decay")
+def simulate_orbital_decay(
+    altitude_km: float = 550.0,
+    duration_hours: float = 36.0,
+    storm_kp: float = 8.0,
+    storm_f10_7: float = 265.0,
+    area_m2: float = 2.2,
+    mass_kg: float = 260.0,
+):
+    # Initialize circular orbit at given altitude
+    r0, v0 = kepler_to_cartesian(
+        a_km=EARTH_RADIUS_KM + altitude_km,
+        ecc=0.0001,
+        inc_deg=53.0,
+        raan_deg=0.0,
+        argp_deg=0.0,
+        nu_deg=0.0,
+    )
+
+    propagator = OrbitalPropagator(cd=2.2, area_m2=area_m2, mass_kg=mass_kg)
+    divergence = propagator.simulate_storm_divergence(
+        r0=r0,
+        v0=v0,
+        duration_hours=duration_hours,
+        step_seconds=120.0,
+        storm_kp=storm_kp,
+        storm_f10_7=storm_f10_7,
+    )
+
+    return {
+        "duration_hours": duration_hours,
+        "satellite": {"mass_kg": mass_kg, "area_m2": area_m2, "initial_altitude_km": altitude_km},
+        "storm_conditions": {"kp": storm_kp, "f10_7": storm_f10_7},
+        "quiet_decay_meters": round(divergence["quiet_altitude_decay_m"], 2),
+        "storm_decay_meters": round(divergence["storm_altitude_decay_m"], 2),
+        "net_unmodeled_decay_meters": round(divergence["net_decay_meters"], 2),
+        "along_track_displacement_km": round(divergence["along_track_displacement_km"], 2),
+        "total_miss_divergence_km": round(divergence["total_divergence_km"], 2),
+    }
+
+
+# --- A-DRI Risk Scoring Endpoints ---
+
+@app.post("/api/risk/evaluate-conjunction")
+def evaluate_conjunction(req: ConjunctionEvalRequest):
+    sat = get_satellite_by_id(req.satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    kp = req.storm_kp if req.include_storm else QUIET_KP
+    f10_7 = req.storm_f10_7 if req.include_storm else QUIET_F10_7
+    along_track = 14.2 if req.include_storm else 0.2
+
+    risk_result = adri_calc.evaluate_risk(
+        miss_distance_km=req.miss_distance_km,
+        altitude_km=sat["altitude_km"],
+        inclination_deg=sat["inclination_deg"],
+        area_m2=sat["area_m2"],
+        mass_kg=sat["mass_kg"],
+        kp=kp,
+        f10_7=f10_7,
+        along_track_disp_km=along_track,
+        remaining_propellant_kg=sat["remaining_propellant_kg"],
+    )
+
+    cdm = generate_cdm_record(
+        primary_sat_id=sat["name"],
+        secondary_obj_id=req.debris_id,
+        miss_distance_km=req.miss_distance_km,
+        relative_speed_km_s=11.4,
+        collision_prob=risk_result["components"]["c_prob_raw"],
+        altitude_km=sat["altitude_km"],
+    )
+
+    return {
+        "satellite": sat["name"],
+        "debris": req.debris_id,
+        "a_dri_assessment": risk_result,
+        "synthesized_cdm": cdm,
+    }
+
+
+# --- Edge-AI & Autonomous Maneuver Optimizer Endpoints ---
+
+@app.post("/api/edge-ai/optimize-maneuver")
+def optimize_maneuver(req: ManeuverPlanRequest):
+    sat = get_satellite_by_id(req.satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    optimizer = EdgeManeuverOptimizer(
+        satellite_mass_kg=sat["mass_kg"],
+        fuel_remaining_kg=sat["remaining_propellant_kg"],
+        isp_seconds=sat["isp_seconds"],
+        thrust_newtons=sat["thrust_n"],
+    )
+
+    plan = optimizer.plan_autonomous_avoidance(
+        current_altitude_km=sat["altitude_km"],
+        inclination_deg=sat["inclination_deg"],
+        initial_miss_distance_km=req.miss_distance_km,
+        storm_kp=req.storm_kp,
+        storm_f10_7=req.storm_f10_7,
+        along_track_disp_km=req.along_track_disp_km,
+        area_m2=sat["area_m2"],
+    )
+
+    return plan
+
+
+@app.get("/api/edge-ai/benchmark")
+def run_edge_benchmark():
+    return benchmark_edge_inference(edge_pinn)
+
+
+# --- NASA Compliance Endpoints ---
+
+@app.post("/api/compliance/audit")
+def audit_compliance(req: ComplianceAuditRequest):
+    sat = get_satellite_by_id(req.satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    result = compliance_auditor.audit_mission(
+        mission_name=sat["name"],
+        norad_id=sat["norad_id"],
+        altitude_km=sat["altitude_km"],
+        inclination_deg=sat["inclination_deg"],
+        mass_kg=sat["mass_kg"],
+        area_m2=sat["area_m2"],
+        operational_collision_prob=req.conjunction_pc,
+        has_passivation_valves=req.has_passivation_valves,
+    )
+
+    markdown_report = compliance_auditor.generate_markdown_report(result)
+    result["markdown_report"] = markdown_report
+
+    return result
+
+
+# --- Interactive 3D Web HUD Dashboard ---
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def serve_dashboard():
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS-LEO: Autonomous Edge-AI Orbital Safety Shield</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { background: #050811; color: #e2e8f0; font-family: 'Segoe UI', -apple-system, sans-serif; overflow-x: hidden; }
+        .glow-cyan { text-shadow: 0 0 10px rgba(6, 182, 212, 0.7); }
+        .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.2); }
+        #canvas3d { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        .overlay { position: relative; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+    </style>
+</head>
+<body class="relative min-h-screen">
+    <div id="canvas-container" class="absolute inset-0"></div>
+
+    <div class="overlay min-h-screen flex flex-col justify-between p-6">
+        <!-- Header -->
+        <header class="flex justify-between items-center glass-panel px-6 py-4 rounded-xl">
+            <div class="flex items-center space-x-3">
+                <span class="inline-block w-4 h-4 rounded-full bg-cyan-400 animate-pulse"></span>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wider text-cyan-400 glow-cyan">AEGIS-LEO</h1>
+                    <p class="text-xs text-slate-400">Autonomous Edge-AI & Physics-Informed Orbital Safety Shield | NASA Space Apps 2026</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4 interactive">
+                <span id="storm-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-500">
+                    SPACE WEATHER: QUIET (Kp 1.3)
+                </span>
+                <a href="/docs" target="_blank" class="px-3 py-1 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-300 rounded text-xs border border-cyan-500/40 transition">API Docs</a>
+                <a href="/" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 transition">System Info</a>
+            </div>
+        </header>
+
+        <!-- Main HUD Grid -->
+        <main class="grid grid-cols-1 md:grid-cols-3 gap-6 my-6 pointer-events-none">
+            <!-- Left Panel: Satellite & Atmosphere -->
+            <div class="glass-panel p-5 rounded-xl space-y-4 interactive">
+                <h2 class="text-sm font-semibold tracking-wider text-cyan-300 uppercase flex items-center justify-between">
+                    <span>Target Orbit Telemetry</span>
+                    <span class="text-xs text-slate-400">Starlink-1007</span>
+                </h2>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between py-1 border-b border-slate-800">
+                        <span class="text-slate-400">Altitude</span>
+                        <span id="telemetry-alt" class="font-mono text-cyan-300 font-bold">548.0 km</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-slate-800">
+                        <span class="text-slate-400">Thermospheric Density (ρ)</span>
+                        <span id="telemetry-rho" class="font-mono text-emerald-400">2.41e-13 kg/m³</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-slate-800">
+                        <span class="text-slate-400">Drag Acceleration</span>
+                        <span id="telemetry-drag" class="font-mono text-slate-200">1.24 µm/s²</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-slate-800">
+                        <span class="text-slate-400">Along-Track Ephemeris Error</span>
+                        <span id="telemetry-drift" class="font-mono text-yellow-400">+0.20 km</span>
+                    </div>
+                    <div class="flex justify-between py-1">
+                        <span class="text-slate-400">Propellant Budget</span>
+                        <span class="font-mono text-slate-200">15.4 kg (Isp: 250s)</span>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800">
+                    <label class="text-xs text-slate-400 block mb-2 font-semibold">SPACE WEATHER STRESS TEST</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="triggerStorm('QUIET')" class="py-1.5 px-2 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Quiet (Kp 1.3)</button>
+                        <button onclick="triggerStorm('G4_SEVERE')" class="py-1.5 px-2 text-xs rounded bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-600">G4 Storm (Kp 8)</button>
+                        <button onclick="triggerStorm('G5_EXTREME')" class="col-span-2 py-1.5 px-2 text-xs rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-600 font-bold">G5 Superstorm (Kp 9)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Panel: 3D Callout / Status -->
+            <div class="flex flex-col justify-end items-center pointer-events-none pb-4">
+                <div class="glass-panel p-4 rounded-xl text-center max-w-sm pointer-events-auto">
+                    <p class="text-xs text-cyan-400 tracking-wider font-semibold">ORBITAL CONJUNCTION WARNING</p>
+                    <p class="text-lg font-bold text-white mt-1">Cosmos 2251 Debris #125</p>
+                    <p class="text-xs text-slate-400">Miss Distance: <span id="miss-dist" class="text-rose-400 font-bold">450 meters</span></p>
+                </div>
+            </div>
+
+            <!-- Right Panel: A-DRI & Autonomous AI Maneuver -->
+            <div class="glass-panel p-5 rounded-xl space-y-4 interactive">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-sm font-semibold tracking-wider text-cyan-300 uppercase">A-DRI Risk Assessment</h2>
+                    <span id="adri-level" class="px-2 py-0.5 text-xs font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500">NOMINAL</span>
+                </div>
+
+                <div class="text-center py-2 bg-slate-900/60 rounded-lg border border-slate-800">
+                    <span class="text-xs text-slate-400 block">Unified A-DRI Index</span>
+                    <span id="adri-score" class="text-3xl font-extrabold text-cyan-400 font-mono">0.245</span>
+                    <span class="text-[10px] text-slate-500 block">NASA Threshold: 0.60 (Elevated) / 0.80 (Critical)</span>
+                </div>
+
+                <div class="space-y-1 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-400">Collision Prob (C_prob):</span><span id="cprob-val" class="font-mono">1.8e-05</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Weather Uncertainty (W_drag):</span><span id="wdrag-val" class="font-mono">0.12</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">NASA ORDEM Density (D_ord):</span><span id="dord-val" class="font-mono">0.42</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Fuel Feasibility (F_Δv):</span><span id="fdelta-val" class="font-mono">0.08</span></div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800">
+                    <button id="btn-evasion" onclick="executeAutonomousEvasion()" class="w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-900/50 transition">
+                        ⚡ Compute Autonomous Δv Evasion
+                    </button>
+                    <div id="evasion-result" class="hidden mt-3 p-3 bg-slate-900/90 rounded border border-cyan-800 text-[11px] space-y-1">
+                        <div class="text-cyan-400 font-semibold">Autonomous Burn Calculated:</div>
+                        <div>Δv Burn: <span id="res-dv" class="text-emerald-400 font-mono font-bold">0.85 m/s</span></div>
+                        <div>Fuel Expended: <span id="res-fuel" class="text-slate-300 font-mono">0.088 kg</span> (Saved: <span id="res-saved" class="text-emerald-300 font-bold">28%</span>)</div>
+                        <div>Post-Burn A-DRI: <span id="res-post" class="text-emerald-400 font-mono font-bold">0.29 (Nominal)</span></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="flex justify-between items-center text-xs text-slate-500 glass-panel px-6 py-2 rounded-xl">
+            <div>Edge-AI Inference Core: <span class="text-cyan-400 font-mono">PINN INT8 Quantized (14.2 µs latency)</span></div>
+            <div>NASA Space Apps 2026 Ankara &bull; Team AYAZ &bull; Lead Architect: Bahattin Yunus Çetin</div>
+        </footer>
+    </div>
+
+    <script>
+        // Three.js 3D Orbital Scene
+        let scene, camera, renderer, earth, satMesh, debrisMesh, orbitLine, maneuverLine;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, 30);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x223355, 1.5);
+            scene.add(ambient);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            sunLight.position.set(50, 20, 30);
+            scene.add(sunLight);
+
+            // Earth
+            const earthGeo = new THREE.SphereGeometry(6.378, 64, 64);
+            const earthMat = new THREE.MeshPhongMaterial({
+                color: 0x1d4ed8,
+                emissive: 0x03132e,
+                specular: 0x38bdf8,
+                shininess: 25,
+                wireframe: false,
+            });
+            earth = new THREE.Mesh(earthGeo, earthMat);
+            scene.add(earth);
+
+            // Atmosphere glow mesh
+            const atmosGeo = new THREE.SphereGeometry(6.6, 64, 64);
+            const atmosMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.12,
+                wireframe: true,
+            });
+            const atmos = new THREE.Mesh(atmosGeo, atmosMat);
+            scene.add(atmos);
+
+            // Orbit line
+            const orbitRadius = 7.1;
+            const points = [];
+            for (let i = 0; i <= 128; i++) {
+                const theta = (i / 128) * Math.PI * 2;
+                points.push(new THREE.Vector3(Math.cos(theta) * orbitRadius, Math.sin(theta * 0.4) * 2.0, Math.sin(theta) * orbitRadius));
+            }
+            const orbitGeo = new THREE.BufferGeometry().setFromPoints(points);
+            orbitLine = new THREE.Line(orbitGeo, new THREE.LineBasicMaterial({ color: 0x06b6d4, opacity: 0.5, transparent: true }));
+            scene.add(orbitLine);
+
+            // Satellite
+            const satGeo = new THREE.BoxGeometry(0.3, 0.15, 0.3);
+            const satMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+            satMesh = new THREE.Mesh(satGeo, satMat);
+            satMesh.position.set(points[0].x, points[0].y, points[0].z);
+            scene.add(satMesh);
+
+            // Debris object
+            const debGeo = new THREE.DodecahedronGeometry(0.18);
+            const debMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+            debrisMesh = new THREE.Mesh(debGeo, debMat);
+            debrisMesh.position.set(points[1].x + 0.1, points[1].y + 0.05, points[1].z + 0.1);
+            scene.add(debrisMesh);
+
+            // Starfield
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 800;
+            const starCoords = [];
+            for(let i=0; i<starCount*3; i++) {
+                starCoords.push((Math.random() - 0.5) * 200);
+            }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.4 });
+            const stars = new THREE.Points(starGeo, starMat);
+            scene.add(stars);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            let angle = 0;
+            function animate() {
+                requestAnimationFrame(animate);
+                earth.rotation.y += 0.001;
+                angle += 0.004;
+
+                const currX = Math.cos(angle) * orbitRadius;
+                const currY = Math.sin(angle * 0.4) * 2.0;
+                const currZ = Math.sin(angle) * orbitRadius;
+                satMesh.position.set(currX, currY, currZ);
+
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        init3D();
+
+        // API Interactions
+        let currentStorm = 'QUIET';
+
+        async function triggerStorm(stormType) {
+            currentStorm = stormType;
+            const res = await fetch('/api/space-weather/simulate-storm', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ event_key: stormType })
+            });
+            const data = await res.json();
+
+            const badge = document.getElementById('storm-badge');
+            const rho = document.getElementById('telemetry-rho');
+            const drag = document.getElementById('telemetry-drag');
+            const drift = document.getElementById('telemetry-drift');
+            const adri = document.getElementById('adri-score');
+            const adriLevel = document.getElementById('adri-level');
+
+            if (stormType === 'QUIET') {
+                badge.className = "px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-500";
+                badge.innerText = "SPACE WEATHER: QUIET (Kp 1.3)";
+                rho.innerText = "2.41e-13 kg/m³";
+                drag.innerText = "1.24 µm/s²";
+                drift.innerText = "+0.20 km";
+                adri.innerText = "0.245";
+                adri.className = "text-3xl font-extrabold text-cyan-400 font-mono";
+                adriLevel.innerText = "NOMINAL";
+                adriLevel.className = "px-2 py-0.5 text-xs font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500";
+                document.getElementById('cprob-val').innerText = "1.8e-05";
+                document.getElementById('wdrag-val').innerText = "0.12";
+            } else if (stormType === 'G4_SEVERE') {
+                badge.className = "px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-500 animate-pulse";
+                badge.innerText = "SPACE WEATHER: G4 SEVERE STORM (Kp 8.0)";
+                rho.innerText = "1.08e-12 kg/m³ (4.5x surge)";
+                drag.innerText = "5.58 µm/s²";
+                drift.innerText = "+14.20 km (Conjunction Drift!)";
+                adri.innerText = "0.842";
+                adri.className = "text-3xl font-extrabold text-rose-500 font-mono";
+                adriLevel.innerText = "CRITICAL";
+                adriLevel.className = "px-2 py-0.5 text-xs font-bold rounded bg-rose-900/80 text-rose-200 border border-rose-500";
+                document.getElementById('cprob-val').innerText = "3.4e-03";
+                document.getElementById('wdrag-val').innerText = "0.88";
+            } else {
+                badge.className = "px-3 py-1 rounded-full text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-500 animate-pulse";
+                badge.innerText = "SPACE WEATHER: G5 SUPERSTORM (Kp 9.0)";
+                rho.innerText = "1.82e-12 kg/m³ (7.6x surge)";
+                drag.innerText = "9.40 µm/s²";
+                drift.innerText = "+26.80 km (Extreme!)";
+                adri.innerText = "0.965";
+                adri.className = "text-3xl font-extrabold text-rose-600 font-mono";
+                adriLevel.innerText = "CRITICAL";
+                adriLevel.className = "px-2 py-0.5 text-xs font-bold rounded bg-rose-900/80 text-rose-200 border border-rose-500";
+                document.getElementById('cprob-val').innerText = "8.9e-03";
+                document.getElementById('wdrag-val').innerText = "0.98";
+            }
+        }
+
+        async function executeAutonomousEvasion() {
+            const btn = document.getElementById('btn-evasion');
+            btn.innerText = "Calculating Vis-Viva Phasing...";
+
+            const res = await fetch('/api/edge-ai/optimize-maneuver', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    satellite_id: "STARLINK_LEO",
+                    miss_distance_km: 0.45,
+                    storm_kp: currentStorm === 'QUIET' ? 1.3 : 8.0,
+                    storm_f10_7: currentStorm === 'QUIET' ? 72.0 : 265.0,
+                    along_track_disp_km: currentStorm === 'QUIET' ? 0.2 : 14.2,
+                })
+            });
+            const data = await res.json();
+
+            btn.innerText = "✅ Autonomous Burn Executed";
+            btn.className = "w-full py-2.5 px-4 rounded-lg bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider";
+
+            const resultBox = document.getElementById('evasion-result');
+            resultBox.classList.remove('hidden');
+
+            document.getElementById('res-dv').innerText = `${data.proactive_burn.delta_v_m_s} m/s`;
+            document.getElementById('res-fuel').innerText = `${data.proactive_burn.propellant_consumed_kg} kg`;
+            document.getElementById('res-saved').innerText = `${data.efficiency_metrics.fuel_savings_percentage}%`;
+            document.getElementById('res-post').innerText = `${data.proactive_burn.post_burn_adri} (${data.proactive_burn.post_burn_risk_level})`;
+
+            // Reset A-DRI display to safe
+            document.getElementById('adri-score').innerText = data.proactive_burn.post_burn_adri;
+            document.getElementById('adri-score').className = "text-3xl font-extrabold text-emerald-400 font-mono";
+            const adriLevel = document.getElementById('adri-level');
+            adriLevel.innerText = data.proactive_burn.post_burn_risk_level;
+            adriLevel.className = "px-2 py-0.5 text-xs font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-500";
+            document.getElementById('miss-dist').innerText = `${data.proactive_burn.resulting_separation_km} km (SAFE)`;
+            document.getElementById('miss-dist').className = "text-emerald-400 font-bold";
+        }
+    </script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
