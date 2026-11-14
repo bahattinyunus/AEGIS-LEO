@@ -29,6 +29,15 @@ from aegis_leo.data.space_weather import SpaceWeatherService, SpaceWeatherEvent
 from aegis_leo.data.catalog import list_satellites, list_debris, get_satellite_by_id
 from aegis_leo.data.cdm import generate_cdm_record
 from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
+from aegis_leo.physics.atmosphere_models import compare_atmospheric_models
+from aegis_leo.physics.ground_track import calculate_ground_track, analyze_communication_blackouts, GROUND_STATIONS
+from aegis_leo.screening.constellation_screen import (
+    generate_walker_delta_constellation,
+    generate_synthetic_debris_cloud,
+    ConstellationConjunctionScreener,
+)
+from aegis_leo.ai.pareto_optimizer import ParetoManeuverOptimizer
+from aegis_leo.data.live_feeds import LiveSpaceWeatherFeed
 
 app = FastAPI(
     title="AEGIS-LEO Mission Control API",
@@ -49,6 +58,8 @@ weather_service = SpaceWeatherService()
 adri_calc = ADRICalculator()
 edge_pinn = get_pretrained_edge_pinn()
 compliance_auditor = NASAComplianceAuditor()
+live_weather_feed = LiveSpaceWeatherFeed()
+constellation_screener = ConstellationConjunctionScreener()
 
 
 # ------------------ Request / Response Schemas ------------------ #
@@ -294,6 +305,117 @@ def audit_compliance(req: ComplianceAuditRequest):
     result["markdown_report"] = markdown_report
 
     return result
+
+
+# --- Live SWPC Feed Endpoint ---
+
+@app.get("/api/space-weather/live")
+def get_live_noaa_space_weather():
+    return live_weather_feed.fetch_live_kp_and_flux()
+
+
+# --- Atmosphere Models Comparison Endpoint ---
+
+@app.get("/api/atmosphere/compare-models")
+def compare_models_endpoint(
+    kp: float = Query(8.0, ge=0.0, le=9.0),
+    f10_7: float = Query(240.0, ge=50.0, le=450.0),
+):
+    altitudes = [200.0, 350.0, 500.0, 550.0, 650.0, 800.0, 950.0]
+    return compare_atmospheric_models(altitudes, kp=kp, f10_7=f10_7)
+
+
+# --- Fleet Constellation Screening Endpoint ---
+
+class FleetScreenRequest(BaseModel):
+    total_satellites: int = Field(24, ge=4, le=72)
+    debris_count: int = Field(100, ge=10, le=300)
+    storm_kp: float = Field(8.0, ge=0.0, le=9.0)
+    storm_f10_7: float = Field(240.0, ge=50.0, le=450.0)
+    screening_threshold_km: float = Field(2.5, ge=0.5, le=10.0)
+
+
+@app.post("/api/fleet/screen")
+def screen_fleet(req: FleetScreenRequest):
+    fleet = generate_walker_delta_constellation(total_satellites=req.total_satellites)
+    debris = generate_synthetic_debris_cloud(count=req.debris_count)
+    return constellation_screener.screen_constellation(
+        fleet=fleet,
+        debris_population=debris,
+        storm_kp=req.storm_kp,
+        storm_f10_7=req.storm_f10_7,
+        screening_threshold_km=req.screening_threshold_km,
+    )
+
+
+# --- Multi-Objective Pareto Maneuver Optimizer Endpoint ---
+
+class ParetoRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    miss_distance_km: float = 0.45
+    storm_kp: float = 8.0
+    storm_f10_7: float = 240.0
+    num_candidates: int = Field(10, ge=4, le=25)
+
+
+@app.post("/api/maneuvers/pareto-frontier")
+def get_pareto_frontier(req: ParetoRequest):
+    sat = get_satellite_by_id(req.satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    optimizer = ParetoManeuverOptimizer(
+        mass_kg=sat["mass_kg"],
+        fuel_remaining_kg=sat["remaining_propellant_kg"],
+        isp_s=sat["isp_seconds"],
+    )
+
+    return optimizer.generate_pareto_frontier(
+        current_altitude_km=sat["altitude_km"],
+        inclination_deg=sat["inclination_deg"],
+        initial_miss_km=req.miss_distance_km,
+        storm_kp=req.storm_kp,
+        storm_f10_7=req.storm_f10_7,
+        num_candidates=req.num_candidates,
+    )
+
+
+# --- Ground Track & Blackout Analysis Endpoint ---
+
+@app.get("/api/ground-stations")
+def list_ground_stations():
+    return GROUND_STATIONS
+
+
+@app.get("/api/ground-track/calculate")
+def get_ground_track(
+    altitude_km: float = 550.0,
+    inclination_deg: float = 53.0,
+    duration_hours: float = 3.0,
+    storm_kp: float = 8.0,
+):
+    r0, v0 = kepler_to_cartesian(
+        a_km=EARTH_RADIUS_KM + altitude_km,
+        ecc=0.0001,
+        inc_deg=inclination_deg,
+        raan_deg=0.0,
+        argp_deg=0.0,
+        nu_deg=0.0,
+    )
+    propagator = OrbitalPropagator(cd=2.2, area_m2=2.2, mass_kg=260.0)
+    sim = propagator.propagate_numerical(
+        r0=r0, v0=v0, duration_hours=duration_hours, step_seconds=60.0, kp=storm_kp
+    )
+
+    track = calculate_ground_track(sim["positions_km"], sim["time_seconds"])
+    blackout_analysis = analyze_communication_blackouts(track, storm_kp=storm_kp)
+
+    return {
+        "duration_hours": duration_hours,
+        "track_points_count": len(track),
+        "ground_track": track[::4],  # Sampled for compact response
+        "blackout_analysis": blackout_analysis,
+    }
 
 
 # --- Interactive 3D Web HUD Dashboard ---
