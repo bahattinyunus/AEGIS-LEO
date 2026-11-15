@@ -29,7 +29,7 @@ jobs:
         pip install -r requirements.txt
         pip install pytest httpx
 
-    - name: Execute Pytest Suite (30+ Verification Tests)
+    - name: Execute Pytest Suite
       run: |
         pytest -v --tb=short
 
@@ -42,3 +42,6 @@ jobs:
         python -m aegis_leo.cli status
         python -m aegis_leo.cli eval --miss 0.45 --kp 8.0
         python -m aegis_leo.cli monte-carlo --trials 500
+        python -m aegis_leo.cli radiation --alt 693 --inc 98.2 --kp 8
+        python -m aegis_leo.cli transfer --alt1 550 --alt2 600
+        python -m aegis_leo.cli tca

@@ -284,3 +284,51 @@ def test_wave3_v2_rest_endpoints():
 
 
 
+
+
+def test_wave4_v21_rest_endpoints():
+    r_rad = client.post("/api/physics/radiation-environment", json={"altitude_km": 693.0, "inclination_deg": 98.2, "kp": 7.0})
+    assert r_rad.status_code == 200
+    rad = r_rad.json()
+    assert rad["saa_exposure_fraction"] > 0.0
+    assert rad["radiation_status"] in ("NOMINAL_RADIATION_ENVIRONMENT", "RADIATION_DESIGN_MARGIN_LOW")
+
+    r_map = client.get("/api/physics/saa-map?altitude_km=550&grid_step_deg=10")
+    assert r_map.status_code == 200
+    assert r_map.json()["peak_lat_deg"] < 0.0
+
+    r_trn = client.post("/api/astrodynamics/orbit-transfer", json={"initial_altitude_km": 550.0, "target_altitude_km": 600.0})
+    assert r_trn.status_code == 200
+    assert r_trn.json()["recommended_strategy"] == "HOHMANN"
+    assert client.post("/api/astrodynamics/orbit-transfer", json={"propellant_kg": 500.0}).status_code == 422
+
+    r_tca = client.post("/api/risk/tca-screening", json={
+        "primary": {"altitude_km": 550.0, "inclination_deg": 53.0},
+        "secondary": {"altitude_km": 550.3, "inclination_deg": 97.5},
+        "duration_hours": 2.0,
+        "include_j2": False,
+    })
+    assert r_tca.status_code == 200
+    tca = r_tca.json()
+    assert tca["screening_status"] == "RED_CONJUNCTION_ALERT"
+    assert abs(tca["min_miss_distance_km"] - 0.3) < 1e-3
+
+    r_far = client.post("/api/risk/tca-screening", json={
+        "primary": {"altitude_km": 550.0, "inclination_deg": 53.0},
+        "secondary": {"altitude_km": 900.0, "inclination_deg": 97.5},
+    })
+    assert r_far.status_code == 200
+    assert r_far.json()["shell_filter_passed"] is False
+
+
+def test_mission_pipeline_reports_v21_sections():
+    sats = client.get("/api/catalog/satellites").json()
+    data = client.post("/api/mission/end-to-end", json={"satellite_id": sats[0]["id"]}).json()
+    assert data["radiation_environment"]["radiation_status"]
+    assert abs(data["tca_screening"]["min_miss_distance_km"] - 0.85) < 1e-3
+    assert data["disposal_transfer"]["total_delta_v_m_s"] > 0.0
+
+
+def test_root_reports_package_version():
+    from aegis_leo import __version__
+    assert client.get("/").json()["version"] == __version__

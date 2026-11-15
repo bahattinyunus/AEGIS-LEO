@@ -5,6 +5,24 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-11-15
+
+### Added
+- **LEO Trapped Radiation, South Atlantic Anomaly & Dose Engine (`aegis_leo/physics/radiation_environment.py`)**:
+  - Eccentric tilted geomagnetic dipole (field magnitude, McIlwain L-shell, geomagnetic latitude) along the Earth-fixed ground track.
+  - Parametric inner-belt proton (>30 MeV) and outer-belt electron (>1 MeV) flux with an atmospheric loss-cone cutoff that reproduces the SAA, Kp-driven electron enhancement, Stormer cutoff rigidity and storm-time polar-cap SEP access.
+  - Orbit-averaged fluence, TID behind aluminium shielding, proton-induced SEU rate and recommended TMR memory scrub interval. Documented as a first-order engineering model, not an AP-9/AE-9 replacement.
+- **Impulsive Orbit Transfer Planner (`aegis_leo/astrodynamics/orbit_transfer.py`)**: Hohmann, bi-elliptic, optimally split combined plane change, coplanar phasing and Tsiolkovsky propellant feasibility with strategy trade-off report.
+- **TCA Finder & Conjunction Screening (`aegis_leo/risk/tca_finder.py`)**: analytic Kepler + secular J2 propagation, apogee/perigee shell filter, coarse scan with Brent refinement of every range minimum, RIC miss vector, relative speed and synthetic crossing-debris scenario builder.
+- **Integration**: mission pipeline sections `radiation_environment`, `tca_screening`, `disposal_transfer`; REST endpoints `POST /api/physics/radiation-environment`, `GET /api/physics/saa-map`, `POST /api/astrodynamics/orbit-transfer`, `POST /api/risk/tca-screening`; CLI subcommands `aegis radiation`, `aegis transfer`, `aegis tca`; Streamlit Mission Control Tab 16.
+- `LICENSE` file (MIT), matching the license already declared in `pyproject.toml` and the README.
+- Test suite expanded to **413/413 passing tests**.
+
+### Fixed
+- API root endpoint and OpenAPI metadata reported stale versions (`1.0.0` / `2.0.0`); both now read `aegis_leo.__version__`.
+- Streamlit HUD crashed with `KeyError: 'id'` in Tabs 13 and 15 (catalog entries have no `id` field), which also stopped every later tab from rendering; the selected catalog key is used instead.
+- CI now smoke-tests the new CLI subcommands.
+
 ## [2.0.0] - 2026-11-15
 
 ### Added

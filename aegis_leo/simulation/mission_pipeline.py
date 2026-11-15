@@ -12,6 +12,9 @@ verification run:
   6. Edge-AI PINN Autonomous Avoidance Maneuver Synthesis
   7. 9-Agent Autonomous Swarm Consensus Cycle
   8. NASA-STD-8719.14B & FCC 5-Year Orbital Lifetime Compliance Audit
+  9. 6-DOF ADCS Slew, 5-Node Thermal Balance & PQC Telecommand Verification
+  10. Trapped Radiation / SAA Dose & SEU Exposure
+  11. TCA Conjunction Screening & Post-Mission Disposal Transfer Budget
 """
 
 from __future__ import annotations
@@ -38,6 +41,9 @@ from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
 from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 from aegis_leo.risk.adri import ADRICalculator
 from aegis_leo.risk.foster_bplane import compute_bplane_conjunction_risk
+from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
+from aegis_leo.physics.radiation_environment import analyze_radiation_environment
+from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
 
 
 @dataclass
@@ -71,6 +77,9 @@ class MissionSimulationReport:
     attitude_adcs: Dict[str, Any] = field(default_factory=dict)
     thermal_control: Dict[str, Any] = field(default_factory=dict)
     pqc_security: Dict[str, Any] = field(default_factory=dict)
+    radiation_environment: Dict[str, Any] = field(default_factory=dict)
+    tca_screening: Dict[str, Any] = field(default_factory=dict)
+    disposal_transfer: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -218,6 +227,37 @@ def run_end_to_end_mission(config: MissionPipelineConfig) -> MissionSimulationRe
         delta_v_m_s=float(maneuver["proactive_burn"].get("delta_v_m_s", 0.325)),
     )
 
+    # 12. Trapped Radiation, SAA Exposure, TID & SEU Rate
+    radiation = analyze_radiation_environment(
+        altitude_km=alt_km,
+        inclination_deg=float(sat["inclination_deg"]),
+        kp=kp,
+    )
+
+    # 13. TCA Screening of a crossing debris object at the configured miss distance
+    tca_target_s = 1500.0
+    primary = OrbitalElements(altitude_km=alt_km, inclination_deg=float(sat["inclination_deg"]), name=sat["name"])
+    primary.mean_anomaly_deg = math.degrees(-primary.mean_motion_rad_s * tca_target_s) % 360.0
+    debris = build_intercepting_secondary(
+        primary,
+        tca_s=tca_target_s,
+        inclination_deg=(float(sat["inclination_deg"]) + 45.0) % 180.0,
+        radial_offset_km=config.miss_distance_km,
+        include_j2=True,
+    )
+    tca_report = screen_conjunctions(primary, debris, duration_hours=3.0)
+
+    # 14. Post-Mission Disposal Transfer Budget (lower to a fast-decay orbit)
+    disposal_alt_km = max(300.0, min(alt_km - 50.0, 400.0))
+    disposal = plan_orbit_transfer(
+        initial_altitude_km=alt_km,
+        target_altitude_km=disposal_alt_km,
+        wet_mass_kg=float(sat["mass_kg"]),
+        propellant_kg=float(sat["remaining_propellant_kg"]),
+        isp_s=float(sat["isp_seconds"]),
+        thrust_n=float(sat["thrust_n"]),
+    )
+
     # Compute overall Mission Readiness Score (0 - 100)
     score = 100.0
     if not eclipse_report.power_margin_positive:
@@ -231,6 +271,8 @@ def run_end_to_end_mission(config: MissionPipelineConfig) -> MissionSimulationRe
         score -= 20.0
     if not lifetime.fcc_5year_compliant:
         score -= 10.0
+    if radiation.radiation_status == "TID_LIMIT_EXCEEDED":
+        score -= 5.0
     score = max(0.0, min(100.0, round(score, 1)))
 
     overall_status = "MISSION_READY" if score >= 80.0 else ("CAUTION" if score >= 60.0 else "CRITICAL_REVIEW")
@@ -303,5 +345,28 @@ def run_end_to_end_mission(config: MissionPipelineConfig) -> MissionSimulationRe
             "replay_attack_blocked": pqc_report.replay_attack_blocked,
             "tamper_attack_blocked": pqc_report.tamper_attack_blocked,
             "merkle_root_hash": pqc_report.merkle_root_hash,
+        },
+        radiation_environment={
+            "radiation_status": radiation.radiation_status,
+            "saa_exposure_fraction": radiation.saa_exposure_fraction,
+            "saa_passes_per_day": radiation.saa_passes_per_day,
+            "peak_proton_flux_cm2_s": radiation.peak_proton_flux_cm2_s,
+            "tid_krad_per_year": radiation.tid_krad_per_year,
+            "seu_per_day": radiation.seu_per_day,
+            "recommended_scrub_interval_s": radiation.recommended_scrub_interval_s,
+        },
+        tca_screening={
+            "screening_status": tca_report.screening_status,
+            "min_miss_distance_km": tca_report.min_miss_distance_km,
+            "tca_s": tca_report.tca_of_min_miss_s,
+            "relative_speed_km_s": tca_report.relative_speed_at_min_km_s,
+            "events_within_threshold": tca_report.events_within_threshold,
+        },
+        disposal_transfer={
+            "target_altitude_km": disposal_alt_km,
+            "strategy": disposal.recommended_strategy,
+            "total_delta_v_m_s": disposal.total_delta_v_m_s,
+            "propellant_required_kg": disposal.propellant_required_kg,
+            "feasible": disposal.feasible,
         },
     )

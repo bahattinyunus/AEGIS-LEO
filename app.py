@@ -70,6 +70,9 @@ from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
 from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
 from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
 from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
+from aegis_leo.physics.radiation_environment import analyze_radiation_environment, compute_saa_flux_map
+from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
+from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
 
 # ------------------ Streamlit Sayfa Yapılandırması ------------------ #
 st.set_page_config(
@@ -239,11 +242,11 @@ with hud_c4:
     </div>
     """, unsafe_allow_html=True)
 
-# ------------------ 15 Kapsamlı Görev Sekmesi ------------------ #
+# ------------------ 16 Kapsamlı Görev Sekmesi ------------------ #
 (
     t_sim, t_swarm, t_fleet, t_mpc, t_radar, t_iod,
     t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos, t_ops,
-    t_adcs_thm, t_pqc_tour
+    t_adcs_thm, t_pqc_tour, t_rad_xfer
 ) = st.tabs([
     "🌍 1. 3D Yörünge & Kaçınma",
     "🤖 2. 9-Ajanlı Sürü Zekası",
@@ -260,6 +263,7 @@ with hud_c4:
     "🛰️ 13. Yer İstasyonu, Tutulma & Tam Görev",
     "🧭 14. 6-DOF ADCS & Termal Kontrol",
     "🔐 15. Kuantum-Güvenli Telekomut & Çoklu-ADR Turu",
+    "☢️ 16. Radyasyon/SAA, Transfer & TCA Tarama",
 ])
 
 # ==========================================
@@ -895,7 +899,7 @@ with t_ops:
     st.markdown("#### 🚀 Uçtan Uca Otonom Görev Doğrulama Hattı (End-to-End Pipeline)")
     if st.button("🛡️ Tam Entegre Otonom Görev Hattını Çalıştır", type="primary", use_container_width=True):
         pipe_res = run_end_to_end_mission(MissionPipelineConfig(
-            satellite_id=satellite["id"],
+            satellite_id=selected_sat_key,
             storm_preset="g4_severe" if kp_val >= 6.0 else "quiet",
             miss_distance_km=miss_dist,
             link_band=band_sel,
@@ -1002,7 +1006,7 @@ with t_pqc_tour:
         st.markdown("#### 🔐 Post-Kuantum ML-KEM & CCSDS SDLS Doğrulama")
         cmd_dv = st.number_input("İmzalanacak Otonom Manevra Δv (m/s):", min_value=0.05, max_value=25.0, value=0.325, step=0.05)
         pqc_res = run_pqc_telecommand_audit(
-            spacecraft_id=satellite["id"],
+            spacecraft_id=selected_sat_key,
             command_op="EXECUTE_PROACTIVE_BURN",
             delta_v_m_s=float(cmd_dv),
         )
@@ -1035,3 +1039,85 @@ with t_pqc_tour:
         if tour_res.legs:
             st.dataframe(tour_res.legs, use_container_width=True)
 
+
+# ==========================================
+# SEKME 16: RADYASYON / SAA, YÖRÜNGE TRANSFERİ & TCA TARAMA
+# ==========================================
+with t_rad_xfer:
+    st.subheader("☢️ Tuzaklanmış Radyasyon & Güney Atlantik Anomalisi, Yörünge Transfer Planlayıcı ve TCA Kavuşum Taraması")
+    st.caption("Eksantrik eğik dipol jeomanyetik alan, L-kabuğu, TID/SEU tahmini; Hohmann / bi-eliptik / düzlem değişimi / fazlama ve en yakın geçiş zamanı (TCA) bulucu.")
+
+    sat_alt = float(satellite["altitude_km"])
+    sat_inc = float(satellite["inclination_deg"])
+
+    rd_c1, rd_c2 = st.columns([1, 1])
+    with rd_c1:
+        st.markdown("#### ☢️ SAA Proton Akı Haritası & Doz")
+        shield_mm = st.slider("Alüminyum Zırh Kalınlığı (mm):", 0.5, 10.0, 2.5, step=0.5)
+        sep_pfu = st.slider("Güneş Proton Olayı Akısı (>30 MeV, pfu):", 0.0, 500.0, 0.0, step=10.0)
+        rad_res = analyze_radiation_environment(
+            altitude_km=sat_alt,
+            inclination_deg=sat_inc,
+            kp=kp_val,
+            shielding_mm_al=shield_mm,
+            sep_flux_pfu=sep_pfu,
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Radyasyon Ortamı Durumu</div>
+            <div class="{'hud-val-emerald' if rad_res.radiation_status == 'NOMINAL_RADIATION_ENVIRONMENT' else 'hud-val-rose'}">{rad_res.radiation_status}</div>
+            <small style="color:#94a3b8;">SAA Süresi: <b>%{rad_res.saa_exposure_fraction*100:.1f}</b> | TID: <b>{rad_res.tid_krad_per_year:.3f} krad/yıl</b> | SEU: <b>{rad_res.seu_per_day:.2f}/gün</b> | TMR Tarama: <b>{rad_res.recommended_scrub_interval_s:.0f} s</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        saa_map = compute_saa_flux_map(sat_alt)
+        fig_saa = go.Figure()
+        fig_saa.add_trace(go.Heatmap(x=saa_map["lon_deg"], y=saa_map["lat_deg"], z=saa_map["proton_flux_cm2_s"], colorscale="Inferno", colorbar=dict(title="p/cm²/s")))
+        fig_saa.add_trace(go.Scatter(x=[s["lon_deg"] for s in rad_res.timeline], y=[s["lat_deg"] for s in rad_res.timeline], mode="markers", marker=dict(size=3, color="#38bdf8"), name="Yer İzi"))
+        fig_saa.update_layout(title=f"{sat_alt:.0f} km İrtifada >30 MeV Proton Akısı (SAA)", xaxis_title="Boylam (°)", yaxis_title="Enlem (°)", template="plotly_dark", height=340)
+        st.plotly_chart(fig_saa, use_container_width=True)
+
+    with rd_c2:
+        st.markdown("#### 🚀 Yörünge Transfer Planlayıcı")
+        tgt_alt = st.slider("Hedef İrtifa (km):", 200.0, 2000.0, min(2000.0, sat_alt + 50.0), step=10.0)
+        d_inc = st.slider("Eğiklik Değişimi (°):", 0.0, 5.0, 0.0, step=0.1)
+        ph_ang = st.slider("Hedef Yörüngede Faz Kaydırma (°):", -90.0, 90.0, 0.0, step=5.0)
+        try:
+            xfer = plan_orbit_transfer(
+                initial_altitude_km=sat_alt,
+                target_altitude_km=tgt_alt,
+                delta_inclination_deg=d_inc,
+                wet_mass_kg=float(satellite["mass_kg"]),
+                propellant_kg=float(satellite["remaining_propellant_kg"]),
+                isp_s=float(satellite["isp_seconds"]),
+                thrust_n=float(satellite["thrust_n"]),
+                phase_angle_deg=ph_ang,
+                phasing_orbits=20,
+            )
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Önerilen Strateji: {xfer.recommended_strategy}</div>
+                <div class="{'hud-val-emerald' if xfer.feasible else 'hud-val-rose'}">Δv = {xfer.total_delta_v_m_s:.2f} m/s ({'UYGUN' if xfer.feasible else 'YAKIT YETERSİZ'})</div>
+                <small style="color:#94a3b8;">Gerekli Yakıt: <b>{xfer.propellant_required_kg:.3f} kg</b> / Mevcut: <b>{xfer.propellant_available_kg:.2f} kg</b> | Uçuş Süresi: <b>{xfer.time_of_flight_min:.1f} dk</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+        except ValueError as exc:
+            st.warning(f"Transfer planlanamadı: {exc}")
+
+        st.markdown("#### 🎯 TCA Kavuşum Taraması")
+        tca_miss = st.slider("Enkaz Radyal Ofseti (km):", 0.05, 10.0, 0.4, step=0.05)
+        deb_inc = st.slider("Enkaz Eğikliği (°):", 60.0, 120.0, 97.5, step=0.5)
+        prim = OrbitalElements(altitude_km=sat_alt, inclination_deg=sat_inc, name=satellite["name"])
+        try:
+            deb = build_intercepting_secondary(prim, tca_s=1500.0, inclination_deg=deb_inc, radial_offset_km=tca_miss, include_j2=True)
+            tca_res = screen_conjunctions(prim, deb, duration_hours=4.0)
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Tarama Durumu</div>
+                <div class="{'hud-val-rose' if 'RED' in tca_res.screening_status else 'hud-val-emerald'}">{tca_res.screening_status}</div>
+                <small style="color:#94a3b8;">Min. Geçiş: <b>{tca_res.min_miss_distance_km:.3f} km</b> @ T+<b>{tca_res.tca_of_min_miss_s:.1f} s</b> | Bağıl Hız: <b>{tca_res.relative_speed_at_min_km_s:.2f} km/s</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+            st.dataframe(tca_res.events, use_container_width=True)
+        except ValueError as exc:
+            st.warning(f"Kavuşum senaryosu kurulamadı: {exc}")

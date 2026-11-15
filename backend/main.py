@@ -64,12 +64,16 @@ from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
 from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
 from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
 from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
+from aegis_leo.physics.radiation_environment import analyze_radiation_environment, compute_saa_flux_map
+from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
+from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
+from aegis_leo import __version__
 
 
 app = FastAPI(
     title="AEGIS-LEO Mission Control API",
     description="Autonomous Edge-AI & Physics-Informed Orbital Safety Shield API (NASA Space Apps Challenge 2026)",
-    version="2.0.0",
+    version=__version__,
 )
 
 app.add_middleware(
@@ -128,7 +132,7 @@ def root():
         "system": "AEGIS-LEO: Autonomous Edge-AI & Physics-Informed Orbital Safety Shield",
         "team": "Team AYAZ (NASA Space Apps Challenge 2026)",
         "lead": "Bahattin Yunus Çetin (@bahattinyunus)",
-        "version": "1.0.0",
+        "version": __version__,
         "docs_url": "/docs",
         "hud_dashboard": "/dashboard",
     }
@@ -935,6 +939,90 @@ def optimize_lambert_adr_tour(req: LambertADRTourRequest):
         max_targets=req.max_targets,
     )
     return _sanitize_for_json(res.to_dict())
+
+
+# --- Wave 4 (v2.1.0): Radiation Environment, Orbit Transfer Planner & TCA Screening ---
+
+
+class RadiationEnvironmentRequest(BaseModel):
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    inclination_deg: float = Field(default=53.0, ge=0.0, le=180.0)
+    kp: float = Field(default=2.0, ge=0.0, le=9.0)
+    shielding_mm_al: float = Field(default=2.5, ge=0.0, le=50.0)
+    duration_hours: float = Field(default=24.0, ge=1.0, le=72.0)
+    mission_years: float = Field(default=5.0, gt=0.0, le=30.0)
+    component_tid_tolerance_krad: float = Field(default=30.0, gt=0.0, le=1000.0)
+    memory_mbit: float = Field(default=512.0, gt=0.0, le=1.0e6)
+    sep_flux_pfu: float = Field(default=0.0, ge=0.0, le=1.0e5)
+
+
+@app.post("/api/physics/radiation-environment", summary="Trapped radiation, South Atlantic Anomaly, TID & SEU analysis")
+def evaluate_radiation_environment(req: RadiationEnvironmentRequest):
+    res = analyze_radiation_environment(**req.model_dump())
+    return _sanitize_for_json(res.to_dict())
+
+
+@app.get("/api/physics/saa-map", summary="South Atlantic Anomaly trapped proton flux map at a fixed altitude")
+def get_saa_flux_map(
+    altitude_km: float = Query(550.0, ge=160.0, le=2000.0),
+    grid_step_deg: float = Query(5.0, ge=2.0, le=15.0),
+):
+    return compute_saa_flux_map(altitude_km, grid_step_deg, grid_step_deg)
+
+
+class OrbitTransferRequest(BaseModel):
+    initial_altitude_km: float = Field(default=550.0, ge=160.0, le=40000.0)
+    target_altitude_km: float = Field(default=600.0, ge=160.0, le=40000.0)
+    delta_inclination_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
+    wet_mass_kg: float = Field(default=260.0, gt=0.0)
+    propellant_kg: float = Field(default=15.4, ge=0.0)
+    isp_s: float = Field(default=250.0, gt=0.0, le=10000.0)
+    thrust_n: float = Field(default=0.0, ge=0.0)
+    phase_angle_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
+    phasing_orbits: int = Field(default=10, ge=1, le=500)
+    bielliptic_apogee_altitude_km: Optional[float] = Field(default=None, ge=160.0, le=500000.0)
+
+
+@app.post("/api/astrodynamics/orbit-transfer", summary="Hohmann / bi-elliptic / plane-change / phasing transfer planner")
+def plan_orbit_transfer_endpoint(req: OrbitTransferRequest):
+    try:
+        res = plan_orbit_transfer(**req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _sanitize_for_json(res.to_dict())
+
+
+class OrbitalElementsModel(BaseModel):
+    altitude_km: float = Field(ge=160.0, le=40000.0)
+    inclination_deg: float = Field(ge=0.0, le=180.0)
+    raan_deg: float = 0.0
+    eccentricity: float = Field(default=0.0, ge=0.0, lt=0.9)
+    arg_perigee_deg: float = 0.0
+    mean_anomaly_deg: float = 0.0
+    name: str = "OBJECT"
+
+
+class TCAScreeningRequest(BaseModel):
+    primary: OrbitalElementsModel
+    secondary: OrbitalElementsModel
+    duration_hours: float = Field(default=6.0, gt=0.0, le=72.0)
+    threshold_km: float = Field(default=5.0, gt=0.0, le=200.0)
+    include_j2: bool = True
+
+
+@app.post("/api/risk/tca-screening", summary="Time-of-closest-approach conjunction screening between two element sets")
+def run_tca_screening(req: TCAScreeningRequest):
+    res = screen_conjunctions(
+        OrbitalElements(**req.primary.model_dump()),
+        OrbitalElements(**req.secondary.model_dump()),
+        duration_hours=req.duration_hours,
+        threshold_km=req.threshold_km,
+        include_j2=req.include_j2,
+    )
+    data = _sanitize_for_json(res.to_dict())
+    if not res.events:
+        data["min_miss_distance_km"] = None
+    return data
 
 
 # --- Interactive 3D Web HUD Dashboard ---

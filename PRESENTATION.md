@@ -12,8 +12,8 @@ color: #e2e8f0
 ## **AEGIS-LEO: Autonomous Edge-AI & Physics-Informed Orbital Safety Shield**
 ### *2026 NASA Space Apps Challenge — Ankara | Team AYAZ*
 
-[![Version](https://img.shields.io/badge/Release-v2.0.0-00d4ff?style=for-the-badge)]()
-[![Tests](https://img.shields.io/badge/Verified-385%2F385%20Tests%20Passing-10b981?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Release-v2.1.0-00d4ff?style=for-the-badge)]()
+[![Tests](https://img.shields.io/badge/Verified-413%2F413%20Tests%20Passing-10b981?style=for-the-badge)]()
 [![Standard](https://img.shields.io/badge/Compliance-NASA--STD--8719.14B%20%26%20FCC%205--Yr-eab308?style=for-the-badge)]()
 
 <img src="assets/aegis_leo_hero_banner.jpg" alt="AEGIS-LEO Banner (SI-Generated Visual)" width="88%" />
@@ -81,18 +81,18 @@ flowchart LR
 
 ---
 
-# 🖥️ SLIDE 5 / 7 — FULL-STACK MISSION CONTROL (15 TABS, 45+ APIs & CLI)
+# 🖥️ SLIDE 5 / 7 — FULL-STACK MISSION CONTROL (16 TABS, 45+ APIs & CLI)
 
 <p align="center">
   <img src="assets/autonomous_avoidance_hud.jpg" alt="AEGIS-LEO HUD (SI-Generated Visual)" width="76%" />
   <br/><sub><i>SI-Generated Visual: AEGIS-LEO Autonomous Avoidance & Telemetry HUD concept.</i></sub>
 </p>
 
-| Subsystem Layer | Operational Modules Included in AEGIS-LEO v2.0.0 |
+| Subsystem Layer | Operational Modules Included in AEGIS-LEO v2.1.0 |
 | :--- | :--- |
 | **Astrodynamics & GNC** | Cowell RK4 + $J_2$/SRP/3rd-Body, **6-DOF Quaternion ADCS & 4-Wheel RWA Pyramid**, HCW Proximity, **Gauss Optical IOD & Joseph EKF/UKF** |
 | **AI & Control** | **INT8 PINN (<150 µs)**, **SCP/MPC Convex Avoidance**, **VLEO L1 Adaptive Drag Make-Up**, **ISL Federated Learning (FedAvg/FedProx)** |
-| **Spacecraft Ops & Comms** | **Global Ground Station Pass Scheduler (`S/X/Ka/Optical`)**, **Dual-Cone Eclipse & Battery DoD**, **5-Node Orbital Thermal Equilibrium** |
+| **Spacecraft Ops & Comms** | **Global Ground Station Pass Scheduler (`S/X/Ka/Optical`)**, **Dual-Cone Eclipse & Battery DoD**, **5-Node Orbital Thermal Equilibrium**, **SAA / Trapped Radiation TID & SEU**, **Hohmann / Plane-Change Transfer Planner**, **TCA Conjunction Screening** |
 | **ADR & Sustainability** | **Electrodynamic Tether (EDT)**, **Pulsed Laser Ablation (LODR)**, **6-DOF Robotic Capture**, **Lambert Multi-Debris ADR Tour**, **NASA ODAR & Point Nemo** |
 
 ---
@@ -101,14 +101,14 @@ flowchart LR
 
 ### Quantitative Impact (548 km SSO Satellite under NOAA G4 Severe Storm, $K_p = 8.0$)
 
-| Performance Metric | Without AEGIS-LEO (Static Ground CDM) | With AEGIS-LEO v2.0.0 (Autonomous Shield) | Verified Advantage |
+| Performance Metric | Without AEGIS-LEO (Static Ground CDM) | With AEGIS-LEO v2.1.0 (Autonomous Shield) | Verified Advantage |
 | :--- | :---: | :---: | :---: |
 | **Thermospheric Density ($\rho$)** | Static Baseline ($2.45 \times 10^{-13}\text{ kg/m}^3$) | Dynamic Storm ($1.44 \times 10^{-12}\text{ kg/m}^3$) | **5.9x Surge Tracked Live** |
 | **Along-Track Drift Detection** | $0.0\text{ km}$ (Unmodeled) | **$+16.72\text{ km}$** (Compensated) | **Zero Blind-Spot Drift** |
 | **A-DRI Risk & $P_c$ Response** | Stale CDM / Ground Blackout | **0.842 (CRITICAL) $\to$ 0.146 (NOMINAL)** | **Autonomous Safe Clearance** |
 | **Avoidance Burn Cost ($\Delta v$)** | $2.80\text{ m/s}$ (Late Reactive Burn) | **$0.325\text{ m/s}$** (Proactive Phasing) | **Up to 88% Propellant Saved** |
 | **6-DOF ADCS & Thermal Margin** | Unverified Attitude / Thermal Soak | **52.5 s Slew Settle / All 5 Nodes Nominal** | **Closed-Loop Burn Readiness** |
-| **Automated Test Verification** | Manual Scripts | **385 / 385 Unit & Integration Tests (100%)** | **Flight-Grade Reliability** |
+| **Automated Test Verification** | Manual Scripts | **413 / 413 Unit & Integration Tests (100%)** | **Flight-Grade Reliability** |
 
 ---
 
@@ -125,7 +125,7 @@ flowchart LR
 * **Instant Reproducibility (One-Command Launch):**
   ```bash
   git clone https://github.com/bahattinyunus/AEGIS-LEO.git && cd AEGIS-LEO
-  pytest -q                                      # 385 passed (100%)
+  pytest -q                                      # 413 passed (100%)
   python -m aegis_leo.cli mission --sat SAT-01   # End-to-End 11-Stage Autonomous Mission Pipeline
   streamlit run app.py                           # 15-Tab Interactive Mission Control Center
   ```

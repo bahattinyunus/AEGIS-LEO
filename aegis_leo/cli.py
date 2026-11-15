@@ -42,6 +42,9 @@ from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
 from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
 from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
 from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
+from aegis_leo.physics.radiation_environment import analyze_radiation_environment
+from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
+from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
 
 
 def cmd_status(args):
@@ -375,6 +378,9 @@ def cmd_mission(args):
     print(f"Compliance:       NASA-8719={rep.compliance['nasa_std_8719_compliant']} | FCC-5Yr={rep.compliance['fcc_5yr_compliant']} ({rep.compliance['estimated_lifetime_years']:.2f} yr)")
     print(f"ADCS & Thermal:   BurnReady={rep.attitude_adcs.get('burn_attitude_ready')} | Thermal={rep.thermal_control.get('thermal_status')}")
     print(f"PQC Security:     Verified={rep.pqc_security.get('authentic_command_verified')} | MerkleRoot={rep.pqc_security.get('merkle_root_hash')}")
+    print(f"Radiation:        {rep.radiation_environment.get('radiation_status')} | SAA={rep.radiation_environment.get('saa_exposure_fraction', 0.0)*100:.1f}% | SEU/day={rep.radiation_environment.get('seu_per_day')}")
+    print(f"TCA Screening:    {rep.tca_screening.get('screening_status')} | Miss={rep.tca_screening.get('min_miss_distance_km')} km @ T+{rep.tca_screening.get('tca_s')} s")
+    print(f"Disposal Budget:  dV={rep.disposal_transfer.get('total_delta_v_m_s')} m/s | Fuel={rep.disposal_transfer.get('propellant_required_kg')} kg | Feasible={rep.disposal_transfer.get('feasible')}")
     print("=" * 70 + "\n")
 
 
@@ -452,6 +458,73 @@ def cmd_tour(args):
     print(f"Total Mission Duration:   {res.total_mission_duration_days:.2f} days")
     for leg in res.legs:
         print(f"  [Leg {leg['leg_index']}] {leg['target_name']} ({leg['to_altitude_km']} km): Wait={leg['raan_drift_wait_days']}d, dV={leg['total_leg_dv_m_s']} m/s, Fuel={leg['propellant_used_kg']} kg")
+    print("=" * 68 + "\n")
+
+
+def cmd_radiation(args):
+    res = analyze_radiation_environment(
+        altitude_km=args.alt,
+        inclination_deg=args.inc,
+        kp=args.kp,
+        shielding_mm_al=args.shield,
+        mission_years=args.years,
+        sep_flux_pfu=args.sep,
+    )
+    print("\n" + "=" * 68)
+    print(">> TRAPPED RADIATION, SOUTH ATLANTIC ANOMALY & DOSE ANALYSIS <<")
+    print("=" * 68)
+    print(f"Radiation Status:         {res.radiation_status}")
+    print(f"Geomagnetic Field:        {res.min_field_nt:.0f} - {res.max_field_nt:.0f} nT | Max L-shell: {res.max_l_shell:.2f}")
+    print(f"SAA Exposure:             {res.saa_exposure_fraction*100:.2f}% of orbit time | {res.saa_passes_per_day:.1f} crossings/day")
+    print(f"SAA Peak Location:        lat {res.saa_peak_lat_deg:+.1f} deg, lon {res.saa_peak_lon_deg:+.1f} deg")
+    print(f"Proton Flux (>30 MeV):    peak {res.peak_proton_flux_cm2_s:.1f} | mean {res.mean_proton_flux_cm2_s:.2f} /cm2/s")
+    print(f"Electron Flux (>1 MeV):   peak {res.peak_electron_flux_cm2_s:.1f} | mean {res.mean_electron_flux_cm2_s:.2f} /cm2/s")
+    print(f"Polar Cap / SEP Access:   {res.polar_cap_exposure_fraction*100:.2f}% | Min cutoff rigidity: {res.min_cutoff_rigidity_gv:.3f} GV")
+    print(f"TID behind {res.shielding_mm_al:.1f} mm Al:    {res.tid_krad_per_year:.4f} krad/yr | Mission: {res.mission_tid_krad:.3f} krad (margin x{res.tid_margin_factor})")
+    print(f"SEU Rate:                 {res.seu_per_day:.3f} /day | Peak {res.peak_seu_per_hour:.3f} /h | TMR scrub every {res.recommended_scrub_interval_s:.0f} s")
+    print("=" * 68 + "\n")
+
+
+def cmd_transfer(args):
+    res = plan_orbit_transfer(
+        initial_altitude_km=args.alt1,
+        target_altitude_km=args.alt2,
+        delta_inclination_deg=args.dinc,
+        wet_mass_kg=args.mass,
+        propellant_kg=args.fuel,
+        isp_s=args.isp,
+        thrust_n=args.thrust,
+        phase_angle_deg=args.phase,
+        phasing_orbits=args.phasing_orbits,
+        bielliptic_apogee_altitude_km=args.bielliptic,
+    )
+    print("\n" + "=" * 68)
+    print(">> IMPULSIVE ORBIT TRANSFER PLANNER <<")
+    print("=" * 68)
+    print(f"Transfer:                 {res.initial_altitude_km:.1f} km -> {res.target_altitude_km:.1f} km | dInc = {res.delta_inclination_deg:.3f} deg")
+    print(f"Recommended Strategy:     {res.recommended_strategy}")
+    print(f"Total Delta-V:            {res.total_delta_v_m_s:.3f} m/s | Time of Flight: {res.time_of_flight_min:.2f} min")
+    print(f"Propellant:               {res.propellant_required_kg:.4f} kg required / {res.propellant_available_kg:.2f} kg available -> {'FEASIBLE' if res.feasible else 'INSUFFICIENT'}")
+    for s in res.strategies:
+        print(f"  - {s['strategy']:<32}: {s['total_delta_v_m_s']:.3f} m/s, burns = {[round(b, 3) for b in s['burns_m_s']]}")
+    if res.phasing:
+        print(f"  - PHASING ({args.phase:+.1f} deg): {res.phasing['total_delta_v_m_s']:.3f} m/s over {res.phasing['time_of_flight_s']/3600.0:.2f} h")
+    print("=" * 68 + "\n")
+
+
+def cmd_tca(args):
+    primary = OrbitalElements(altitude_km=args.alt, inclination_deg=args.inc, name="PRIMARY")
+    primary.mean_anomaly_deg = (-primary.mean_motion_rad_s * args.tca * 180.0 / 3.141592653589793) % 360.0
+    debris = build_intercepting_secondary(primary, tca_s=args.tca, inclination_deg=args.debris_inc, radial_offset_km=args.miss, include_j2=not args.no_j2)
+    res = screen_conjunctions(primary, debris, duration_hours=args.hours, threshold_km=args.threshold, include_j2=not args.no_j2)
+    print("\n" + "=" * 68)
+    print(">> TIME OF CLOSEST APPROACH (TCA) CONJUNCTION SCREENING <<")
+    print("=" * 68)
+    print(f"Screening Status:         {res.screening_status}")
+    print(f"Close Approaches Found:   {res.close_approaches_found} ({res.events_within_threshold} within {res.screening_threshold_km:.1f} km)")
+    print(f"Minimum Miss Distance:    {res.min_miss_distance_km:.4f} km @ T+{res.tca_of_min_miss_s:.2f} s | Rel. speed {res.relative_speed_at_min_km_s:.3f} km/s")
+    for ev in sorted(res.events, key=lambda e: e["miss_distance_km"])[:5]:
+        print(f"  [{ev['severity']:<6}] T+{ev['tca_s']:>10.2f} s | miss {ev['miss_distance_km']:.4f} km | RIC = ({ev['radial_miss_km']:+.3f}, {ev['in_track_miss_km']:+.3f}, {ev['cross_track_miss_km']:+.3f}) km")
     print("=" * 68 + "\n")
 
 
@@ -616,6 +689,42 @@ def main():
     p_tour.add_argument("--alt", type=float, default=750.0, help="Starting altitude (km)")
     p_tour.add_argument("--targets", type=int, default=4, help="Max debris targets to visit")
     p_tour.set_defaults(func=cmd_tour)
+
+    # radiation
+    p_radn = subparsers.add_parser("radiation", help="Trapped radiation, South Atlantic Anomaly, TID & SEU analysis")
+    p_radn.add_argument("--alt", type=float, default=550.0, help="Orbital altitude (km)")
+    p_radn.add_argument("--inc", type=float, default=53.0, help="Inclination (deg)")
+    p_radn.add_argument("--kp", type=float, default=2.0, help="Geomagnetic Kp index")
+    p_radn.add_argument("--shield", type=float, default=2.5, help="Aluminium shielding thickness (mm)")
+    p_radn.add_argument("--years", type=float, default=5.0, help="Mission duration (years)")
+    p_radn.add_argument("--sep", type=float, default=0.0, help="Solar proton event >30 MeV flux (pfu)")
+    p_radn.set_defaults(func=cmd_radiation)
+
+    # transfer
+    p_trn = subparsers.add_parser("transfer", help="Hohmann / bi-elliptic / plane-change / phasing orbit transfer planner")
+    p_trn.add_argument("--alt1", type=float, default=550.0, help="Initial altitude (km)")
+    p_trn.add_argument("--alt2", type=float, default=600.0, help="Target altitude (km)")
+    p_trn.add_argument("--dinc", type=float, default=0.0, help="Inclination change (deg)")
+    p_trn.add_argument("--mass", type=float, default=260.0, help="Wet mass (kg)")
+    p_trn.add_argument("--fuel", type=float, default=15.4, help="Available propellant (kg)")
+    p_trn.add_argument("--isp", type=float, default=250.0, help="Specific impulse (s)")
+    p_trn.add_argument("--thrust", type=float, default=0.0, help="Thrust (N) for burn duration estimate")
+    p_trn.add_argument("--phase", type=float, default=0.0, help="Along-track phase shift at target orbit (deg)")
+    p_trn.add_argument("--phasing-orbits", type=int, default=10, help="Revolutions spent on the phasing orbit")
+    p_trn.add_argument("--bielliptic", type=float, default=None, help="Bi-elliptic intermediate apogee altitude (km)")
+    p_trn.set_defaults(func=cmd_transfer)
+
+    # tca
+    p_tca = subparsers.add_parser("tca", help="Time-of-closest-approach conjunction screening of a crossing debris object")
+    p_tca.add_argument("--alt", type=float, default=550.0, help="Primary altitude (km)")
+    p_tca.add_argument("--inc", type=float, default=53.0, help="Primary inclination (deg)")
+    p_tca.add_argument("--debris-inc", type=float, default=97.5, help="Debris inclination (deg)")
+    p_tca.add_argument("--miss", type=float, default=0.4, help="Radial offset of the debris orbit (km)")
+    p_tca.add_argument("--tca", type=float, default=1500.0, help="Seconds until the engineered node crossing")
+    p_tca.add_argument("--hours", type=float, default=6.0, help="Screening window (hours)")
+    p_tca.add_argument("--threshold", type=float, default=5.0, help="Screening threshold (km)")
+    p_tca.add_argument("--no-j2", action="store_true", help="Disable secular J2 drift")
+    p_tca.set_defaults(func=cmd_tca)
 
 
     args = parser.parse_args()
