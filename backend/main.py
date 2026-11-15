@@ -60,12 +60,16 @@ from aegis_leo.sensors.laser_radar import SpaceborneRadar
 from aegis_leo.ai.mpc_avoidance import SCPAvoidancePlanner, AvoidanceEllipsoid
 from aegis_leo.ai.drag_makeup import compare_admu_controllers
 from aegis_leo.ai.federated_swarm import compare_fedavg_vs_fedprox
+from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
+from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
+from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
+from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 
 
 app = FastAPI(
     title="AEGIS-LEO Mission Control API",
     description="Autonomous Edge-AI & Physics-Informed Orbital Safety Shield API (NASA Space Apps Challenge 2026)",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -850,6 +854,87 @@ def run_vleo_admu(altitude_km: float = Query(220.0, ge=180.0, le=300.0)):
 def run_federated_swarm(num_satellites: int = Query(8, ge=4, le=24), rounds: int = Query(3, ge=1, le=10)):
     res = compare_fedavg_vs_fedprox(num_satellites=num_satellites, rounds=rounds)
     return _sanitize_for_json(res)
+
+
+# --- Wave 3 (v2.0.0): 6-DOF ADCS, Multi-Node Thermal, PQC Security & Lambert ADR Tour ---
+
+
+class ADCSSlewRequest(BaseModel):
+    target_roll_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
+    target_pitch_deg: float = Field(default=35.0, ge=-90.0, le=90.0)
+    target_yaw_deg: float = Field(default=-20.0, ge=-180.0, le=180.0)
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    kp_storm: float = Field(default=6.0, ge=0.0, le=9.0)
+    duration_s: float = Field(default=90.0, ge=20.0, le=300.0)
+
+
+@app.post("/api/astrodynamics/adcs-slew", summary="6-DOF Quaternion ADCS Slew-to-Burn & Reaction Wheel Pyramid simulation")
+def evaluate_adcs_slew(req: ADCSSlewRequest):
+    res = simulate_attitude_slew(
+        target_roll_deg=req.target_roll_deg,
+        target_pitch_deg=req.target_pitch_deg,
+        target_yaw_deg=req.target_yaw_deg,
+        altitude_km=req.altitude_km,
+        kp_storm=req.kp_storm,
+        duration_s=req.duration_s,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+class ThermalBalanceRequest(BaseModel):
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    beta_angle_deg: float = Field(default=22.0, ge=-90.0, le=90.0)
+    kp_storm: float = Field(default=5.0, ge=0.0, le=9.0)
+    avionics_load_w: float = Field(default=85.0, ge=10.0, le=500.0)
+    burn_active: bool = True
+
+
+@app.post("/api/physics/thermal-analysis", summary="5-Node Spacecraft Orbital Thermal Equilibrium & Storm Aero-Heating")
+def evaluate_spacecraft_thermal(req: ThermalBalanceRequest):
+    res = simulate_spacecraft_thermal_balance(
+        altitude_km=req.altitude_km,
+        beta_angle_deg=req.beta_angle_deg,
+        kp_storm=req.kp_storm,
+        avionics_load_w=req.avionics_load_w,
+        burn_active=req.burn_active,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+class PQCTelecommandRequest(BaseModel):
+    spacecraft_id: str = "STARLINK_LEO"
+    command_op: str = "EXECUTE_PROACTIVE_BURN"
+    delta_v_m_s: float = Field(default=0.325, gt=0.0, le=100.0)
+
+
+@app.post("/api/security/pqc-verify", summary="Post-Quantum ML-KEM & CCSDS 355.0-B-2 SDLS Telecommand Security Audit")
+def verify_pqc_telecommand(req: PQCTelecommandRequest):
+    res = run_pqc_telecommand_audit(
+        spacecraft_id=req.spacecraft_id,
+        command_op=req.command_op,
+        delta_v_m_s=req.delta_v_m_s,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+class LambertADRTourRequest(BaseModel):
+    servicer_dry_mass_kg: float = Field(default=450.0, ge=50.0, le=5000.0)
+    initial_fuel_kg: float = Field(default=180.0, ge=10.0, le=2000.0)
+    isp_s: float = Field(default=320.0, ge=150.0, le=3000.0)
+    start_altitude_km: float = Field(default=750.0, ge=300.0, le=1500.0)
+    max_targets: int = Field(default=4, ge=1, le=5)
+
+
+@app.post("/api/adr/lambert-tour", summary="Universal-Variable Lambert Rendezvous & Multi-Target ADR Tour Optimizer")
+def optimize_lambert_adr_tour(req: LambertADRTourRequest):
+    res = plan_multi_debris_adr_tour(
+        servicer_dry_mass_kg=req.servicer_dry_mass_kg,
+        initial_fuel_kg=req.initial_fuel_kg,
+        isp_s=req.isp_s,
+        start_altitude_km=req.start_altitude_km,
+        max_targets=req.max_targets,
+    )
+    return _sanitize_for_json(res.to_dict())
 
 
 # --- Interactive 3D Web HUD Dashboard ---

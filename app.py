@@ -66,6 +66,10 @@ from aegis_leo.agents.swarm_telemetry_bus import SwarmTelemetryBus
 from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
 from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
 from aegis_leo.simulation.mission_pipeline import MissionPipelineConfig, run_end_to_end_mission
+from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
+from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
+from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
+from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 
 # ------------------ Streamlit Sayfa Yapılandırması ------------------ #
 st.set_page_config(
@@ -235,10 +239,11 @@ with hud_c4:
     </div>
     """, unsafe_allow_html=True)
 
-# ------------------ 12 Kapsamlı Görev Sekmesi ------------------ #
+# ------------------ 15 Kapsamlı Görev Sekmesi ------------------ #
 (
     t_sim, t_swarm, t_fleet, t_mpc, t_radar, t_iod,
-    t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos, t_ops
+    t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos, t_ops,
+    t_adcs_thm, t_pqc_tour
 ) = st.tabs([
     "🌍 1. 3D Yörünge & Kaçınma",
     "🤖 2. 9-Ajanlı Sürü Zekası",
@@ -253,6 +258,8 @@ with hud_c4:
     "📑 11. CCSDS CDM & NASA ODAR",
     "🔬 12. Atmosfer Fiziği & Radyasyon",
     "🛰️ 13. Yer İstasyonu, Tutulma & Tam Görev",
+    "🧭 14. 6-DOF ADCS & Termal Kontrol",
+    "🔐 15. Kuantum-Güvenli Telekomut & Çoklu-ADR Turu",
 ])
 
 # ==========================================
@@ -900,3 +907,131 @@ with t_ops:
         m2.metric("Foster B-Plane Pc", f"{pipe_res.conjunction_risk['foster_pc']:.2e}", f"A-DRI: {pipe_res.conjunction_risk['a_dri']:.3f}")
         m3.metric("Sürü BFT Konsensüsü", pipe_res.swarm_consensus["status"], f"Onay: %{pipe_res.swarm_consensus['weighted_approval']*100:.1f}")
         m4.metric("FCC 5-Yıl & NASA Uyum", "UYUMLU" if pipe_res.compliance["nasa_std_8719_compliant"] else "DENETİM", f"Ömür: {pipe_res.compliance['estimated_lifetime_years']:.1f} Yıl")
+
+# ==========================================
+# SEKME 14: 6-DOF ADCS & TERMAL KONTROL
+# ==========================================
+with t_adcs_thm:
+    st.subheader("🧭 6-DOF Kuaterniyon Yönelim Kontrolü (ADCS), Tepki Tekeri Piramidi & 5-Düğümlü Termal Denge")
+    st.caption("Ateşleme öncesi yönelim manevrası (slew-to-burn), 4-tekerlekli RWA momentum tahsisi, manyetorker boşaltımı ve fırtına aerodinamik ısınma analizi.")
+
+    ad_c1, ad_c2 = st.columns([1, 1])
+    with ad_c1:
+        st.markdown("#### 🎯 6-DOF Kuaterniyon Slew-to-Burn & RWA Simülasyonu")
+        pitch_cmd = st.slider("Hedef Yunuslama Açısı (Pitch °):", -60.0, 60.0, 35.0, step=5.0)
+        yaw_cmd = st.slider("Hedef Sapma Açısı (Yaw °):", -60.0, 60.0, -20.0, step=5.0)
+        slew_res = simulate_attitude_slew(
+            target_roll_deg=0.0,
+            target_pitch_deg=pitch_cmd,
+            target_yaw_deg=yaw_cmd,
+            altitude_km=float(satellite["altitude_km"]),
+            kp_storm=kp_val,
+            f10_7=f107_val,
+            duration_s=90.0,
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Yönelim Yerleşme Süresi & İşaretleme Hatası</div>
+            <div class="{'hud-val-emerald' if slew_res.burn_attitude_ready else 'hud-val-amber'}">{slew_res.settling_time_s:.1f} sn ({slew_res.final_pointing_error_arcsec:.1f} arcsec)</div>
+            <small style="color:#94a3b8;">Maks RWA Hızı: <b>{slew_res.peak_wheel_speed_rpm:.0f} RPM</b> | Doygunluk: <b>%{slew_res.wheel_saturation_pct:.1f}</b> | MTQ Boşaltım: <b>{slew_res.mtq_momentum_dumped_nms:.3f} Nms</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig_adcs = go.Figure()
+        fig_adcs.add_trace(go.Scatter(
+            x=[p["time_s"] for p in slew_res.timeline],
+            y=[p["pointing_error_deg"] for p in slew_res.timeline],
+            mode="lines",
+            line=dict(color="#38bdf8", width=3),
+            name="İşaretleme Hatası (°)",
+        ))
+        fig_adcs.add_trace(go.Scatter(
+            x=[p["time_s"] for p in slew_res.timeline],
+            y=[p["max_wheel_rpm"] for p in slew_res.timeline],
+            mode="lines",
+            line=dict(color="#f43f5e", width=2, dash="dot"),
+            yaxis="y2",
+            name="Maks RWA Devri (RPM)",
+        ))
+        fig_adcs.update_layout(
+            title="Kuaterniyon Slew Yakınsaması & Tepki Tekeri Devri",
+            xaxis_title="Zaman (s)",
+            yaxis_title="Yönelim Hatası (°)",
+            yaxis2=dict(title="RWA Hızı (RPM)", overlaying="y", side="right"),
+            template="plotly_dark",
+            height=310,
+        )
+        st.plotly_chart(fig_adcs, use_container_width=True)
+
+    with ad_c2:
+        st.markdown("#### 🔥 5-Düğümlü Yörünge Termal Denge & Fırtına Isınması")
+        avio_w = st.slider("Aviyonik & Edge-AI NPU Isıl Gücü (W):", 25.0, 200.0, 85.0, step=5.0)
+        thm_res = simulate_spacecraft_thermal_balance(
+            altitude_km=float(satellite["altitude_km"]),
+            beta_angle_deg=22.0,
+            kp_storm=kp_val,
+            f10_7=f107_val,
+            avionics_load_w=avio_w,
+            burn_active=True,
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Termal Denge Durumu & Isıtıcı Enerjisi</div>
+            <div class="{'hud-val-emerald' if thm_res.all_nodes_within_limits else 'hud-val-rose'}">{thm_res.thermal_status}</div>
+            <small style="color:#94a3b8;">Güneş Emilimi: <b>{thm_res.mean_solar_absorbed_w:.1f} W</b> | Dünya IR: <b>{thm_res.mean_earth_ir_absorbed_w:.1f} W</b> | Isıtıcı: <b>{thm_res.heater_energy_wh:.2f} Wh</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig_thm = go.Figure()
+        fig_thm.add_trace(go.Scatter(x=[s["orbit_angle_deg"] for s in thm_res.timeline], y=[s["solar_array_c"] for s in thm_res.timeline], mode="lines", name="Güneş Paneli (°C)", line=dict(color="#fbbf24", width=2)))
+        fig_thm.add_trace(go.Scatter(x=[s["orbit_angle_deg"] for s in thm_res.timeline], y=[s["edge_ai_avionics_c"] for s in thm_res.timeline], mode="lines", name="Edge-AI Aviyonik (°C)", line=dict(color="#38bdf8", width=3)))
+        fig_thm.add_trace(go.Scatter(x=[s["orbit_angle_deg"] for s in thm_res.timeline], y=[s["battery_pack_c"] for s in thm_res.timeline], mode="lines", name="Batarya Paketi (°C)", line=dict(color="#34d399", width=2)))
+        fig_thm.add_trace(go.Scatter(x=[s["orbit_angle_deg"] for s in thm_res.timeline], y=[s["propulsion_unit_c"] for s in thm_res.timeline], mode="lines", name="İtki/Tank (°C)", line=dict(color="#f43f5e", width=2)))
+        fig_thm.update_layout(title="Tam Yörünge Çok Düğümlü Sıcaklık Evrimi", xaxis_title="Yörünge Faz Açısı (°)", yaxis_title="Sıcaklık (°C)", template="plotly_dark", height=310)
+        st.plotly_chart(fig_thm, use_container_width=True)
+
+# ==========================================
+# SEKME 15: KUANTUM-GÜVENLİ TELEKOMUT & ÇOKLU-ADR TURU
+# ==========================================
+with t_pqc_tour:
+    st.subheader("🔐 Post-Kuantum (ML-KEM) CCSDS 355.0-B-2 Telekomut Güvenliği & Çoklu-Enkaz Lambert ADR Turu")
+    st.caption("Kafes tabanlı kuantum sonrası anahtar değişimi (Module-LWE), siber saldırı engelleme defteri ve çok hedefli aktif enkaz temizleme yörünge turu.")
+
+    pq_c1, pq_c2 = st.columns([1, 1])
+    with pq_c1:
+        st.markdown("#### 🔐 Post-Kuantum ML-KEM & CCSDS SDLS Doğrulama")
+        cmd_dv = st.number_input("İmzalanacak Otonom Manevra Δv (m/s):", min_value=0.05, max_value=25.0, value=0.325, step=0.05)
+        pqc_res = run_pqc_telecommand_audit(
+            spacecraft_id=satellite["id"],
+            command_op="EXECUTE_PROACTIVE_BURN",
+            delta_v_m_s=float(cmd_dv),
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">ML-KEM Kafes Anahtar Uyumu & Siber Koruma</div>
+            <div class="hud-val-emerald">%{pqc_res.kem_bit_agreement_pct:.1f} Uyum ({pqc_res.crypto_latency_us:.0f} µs)</div>
+            <small style="color:#94a3b8;">Replay Engellendi: <b>{'EVET' if pqc_res.replay_attack_blocked else 'HAYIR'}</b> | Sabotaj Engellendi: <b>{'EVET' if pqc_res.tamper_attack_blocked else 'HAYIR'}</b> | Sahte İstasyon: <b>{'ENGELLENDİ' if pqc_res.rogue_spi_blocked else 'AÇIK'}</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+        st.code(f"Algoritma: {pqc_res.algorithm}\nSHA3 Anahtar Parmak İzi: {pqc_res.shared_key_fingerprint_sha3}\nMerkle Kök Özeti:       {pqc_res.merkle_root_hash}\nİmza Etiketi (MAC):      {pqc_res.signed_frame['auth_tag_hex'][:48]}...", language="text")
+        st.dataframe(pqc_res.intrusion_test_ledger, use_container_width=True)
+
+    with pq_c2:
+        st.markdown("#### 🚀 Çoklu-Enkaz Lambert Randevu & ADR Turu Planlayıcı")
+        srv_fuel = st.slider("ADR Servis Aracı Başlangıç Yakıtı (kg):", 60.0, 300.0, 180.0, step=20.0)
+        max_t = st.slider("Maksimum Temizlenecek Enkaz Hedefi:", 1, 5, 4)
+        tour_res = plan_multi_debris_adr_tour(
+            servicer_dry_mass_kg=450.0,
+            initial_fuel_kg=srv_fuel,
+            max_targets=max_t,
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Temizlenen Enkaz & Kessler Risk Azaltımı</div>
+            <div class="hud-val-cyan">{tour_res.targets_visited} Hedef (-{tour_res.total_kessler_risk_removed:.1f} Kessler Puanı)</div>
+            <small style="color:#94a3b8;">Toplam Δv: <b>{tour_res.total_delta_v_m_s:.1f} m/s</b> | Harcanan Yakıt: <b>{tour_res.total_fuel_consumed_kg:.1f} kg</b> | Görev Süresi: <b>{tour_res.total_mission_duration_days:.1f} gün</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+        if tour_res.legs:
+            st.dataframe(tour_res.legs, use_container_width=True)
+

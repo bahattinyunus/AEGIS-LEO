@@ -38,6 +38,10 @@ from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
 from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
 from aegis_leo.compliance.odar_generator import generate_odar_report
 from aegis_leo.simulation.mission_pipeline import MissionPipelineConfig, run_end_to_end_mission
+from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
+from aegis_leo.astrodynamics.lambert_tour import plan_multi_debris_adr_tour
+from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
+from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 
 
 def cmd_status(args):
@@ -369,7 +373,86 @@ def cmd_mission(args):
     print(f"Conjunction Risk: A-DRI={rep.conjunction_risk['a_dri']} | Foster Pc={rep.conjunction_risk['foster_pc']:.2e}")
     print(f"Swarm Consensus:  {rep.swarm_consensus['status']} ({rep.swarm_consensus['weighted_approval']*100:.1f}%)")
     print(f"Compliance:       NASA-8719={rep.compliance['nasa_std_8719_compliant']} | FCC-5Yr={rep.compliance['fcc_5yr_compliant']} ({rep.compliance['estimated_lifetime_years']:.2f} yr)")
+    print(f"ADCS & Thermal:   BurnReady={rep.attitude_adcs.get('burn_attitude_ready')} | Thermal={rep.thermal_control.get('thermal_status')}")
+    print(f"PQC Security:     Verified={rep.pqc_security.get('authentic_command_verified')} | MerkleRoot={rep.pqc_security.get('merkle_root_hash')}")
     print("=" * 70 + "\n")
+
+
+def cmd_adcs(args):
+    res = simulate_attitude_slew(
+        target_roll_deg=args.roll,
+        target_pitch_deg=args.pitch,
+        target_yaw_deg=args.yaw,
+        altitude_km=args.alt,
+        kp_storm=args.kp,
+        duration_s=args.duration,
+    )
+    print("\n" + "=" * 68)
+    print(">> 6-DOF QUATERNION ADCS SLEW & RWA PYRAMID SIMULATION <<")
+    print("=" * 68)
+    print(f"Target Attitude (R,P,Y):  {res.target_euler_deg} deg")
+    print(f"Initial Error:            {res.initial_error_deg:.2f} deg -> Final: {res.final_pointing_error_arcsec:.2f} arcsec")
+    print(f"Settling Time:            {res.settling_time_s:.2f} s | Burn Ready: {res.burn_attitude_ready}")
+    print(f"Peak Wheel Speed / H:     {res.peak_wheel_speed_rpm:.1f} RPM | {res.peak_wheel_momentum_nms:.3f} Nms ({res.wheel_saturation_pct:.1f}% sat)")
+    print(f"Peak RWA Torque:          {res.peak_rwa_torque_mnm:.2f} mN·m | Energy: {res.total_adcs_energy_wh:.4f} Wh")
+    print(f"MTQ Dumped Momentum:      {res.mtq_momentum_dumped_nms:.4f} Nms | Mean Dist Torque: {res.mean_disturbance_torque_unm:.2f} µN·m")
+    print("=" * 68 + "\n")
+
+
+def cmd_thermal(args):
+    res = simulate_spacecraft_thermal_balance(
+        altitude_km=args.alt,
+        beta_angle_deg=args.beta,
+        kp_storm=args.kp,
+        avionics_load_w=args.load,
+        burn_active=not args.no_burn,
+    )
+    print("\n" + "=" * 68)
+    print(">> 5-NODE SPACECRAFT ORBITAL THERMAL EQUILIBRIUM <<")
+    print("=" * 68)
+    print(f"Thermal Status:           {res.thermal_status} (All Within Limits: {res.all_nodes_within_limits})")
+    print(f"Mean Absorbed Solar/IR:   {res.mean_solar_absorbed_w:.1f} W / {res.mean_earth_ir_absorbed_w:.1f} W")
+    print(f"Peak Storm Aero-Heating:  {res.peak_aero_heating_w:.4f} W | Heater Energy: {res.heater_energy_wh:.3f} Wh")
+    for name, node in res.node_summaries.items():
+        print(f"  - {name:<18}: {node['min_temp_c']:+6.2f}°C to {node['max_temp_c']:+6.2f}°C (Limits: [{node['min_operational_c']}, {node['max_operational_c']}]) -> {'OK' if node['within_limits'] else 'WARN'}")
+    print("=" * 68 + "\n")
+
+
+def cmd_pqc(args):
+    res = run_pqc_telecommand_audit(
+        spacecraft_id=args.sat,
+        command_op=args.op,
+        delta_v_m_s=args.dv,
+    )
+    print("\n" + "=" * 68)
+    print(">> POST-QUANTUM (ML-KEM) & CCSDS 355.0-B-2 SDLS SECURITY AUDIT <<")
+    print("=" * 68)
+    print(f"Algorithm Suite:          {res.algorithm}")
+    print(f"Lattice Ring R_q:         q={res.lattice_modulus_q}, n={res.polynomial_degree_n}, k={res.module_rank_k}")
+    print(f"KEM Key Agreement:        {res.kem_bit_agreement_pct:.1f}% | Latency: {res.crypto_latency_us:.1f} µs")
+    print(f"Authentic Command Valid:  {res.authentic_command_verified}")
+    print(f"Intrusion Prevention:     ReplayBlocked={res.replay_attack_blocked} | TamperBlocked={res.tamper_attack_blocked} | RogueSPIBlocked={res.rogue_spi_blocked}")
+    print(f"Merkle Command Root:      {res.merkle_root_hash}")
+    print("=" * 68 + "\n")
+
+
+def cmd_tour(args):
+    res = plan_multi_debris_adr_tour(
+        servicer_dry_mass_kg=args.dry_mass,
+        initial_fuel_kg=args.fuel,
+        isp_s=args.isp,
+        start_altitude_km=args.alt,
+        max_targets=args.targets,
+    )
+    print("\n" + "=" * 68)
+    print(">> MULTI-TARGET ADR LAMBERT RENDEZVOUS TOUR OPTIMIZER <<")
+    print("=" * 68)
+    print(f"Targets Deorbited:        {res.targets_visited} | Total Kessler Risk Removed: {res.total_kessler_risk_removed:.2f}")
+    print(f"Total Delta-V:            {res.total_delta_v_m_s:.2f} m/s | Fuel Used: {res.total_fuel_consumed_kg:.2f} kg (Rem: {res.remaining_fuel_kg:.2f} kg)")
+    print(f"Total Mission Duration:   {res.total_mission_duration_days:.2f} days")
+    for leg in res.legs:
+        print(f"  [Leg {leg['leg_index']}] {leg['target_name']} ({leg['to_altitude_km']} km): Wait={leg['raan_drift_wait_days']}d, dV={leg['total_leg_dv_m_s']} m/s, Fuel={leg['propellant_used_kg']} kg")
+    print("=" * 68 + "\n")
 
 
 def main():
@@ -498,6 +581,41 @@ def main():
     p_mis.add_argument("--miss", type=float, default=0.85, help="Miss distance (km)")
     p_mis.add_argument("--band", default="X_BAND", help="Downlink band")
     p_mis.set_defaults(func=cmd_mission)
+
+    # adcs
+    p_adcs = subparsers.add_parser("adcs", help="6-DOF quaternion ADCS slew & reaction wheel pyramid simulation")
+    p_adcs.add_argument("--roll", type=float, default=0.0, help="Target roll (deg)")
+    p_adcs.add_argument("--pitch", type=float, default=35.0, help="Target pitch (deg)")
+    p_adcs.add_argument("--yaw", type=float, default=-20.0, help="Target yaw (deg)")
+    p_adcs.add_argument("--alt", type=float, default=550.0, help="Orbital altitude (km)")
+    p_adcs.add_argument("--kp", type=float, default=6.0, help="Geomagnetic Kp index")
+    p_adcs.add_argument("--duration", type=float, default=90.0, help="Simulation duration (s)")
+    p_adcs.set_defaults(func=cmd_adcs)
+
+    # thermal
+    p_thm = subparsers.add_parser("thermal", help="5-node spacecraft orbital thermal equilibrium & storm aero-heating")
+    p_thm.add_argument("--alt", type=float, default=550.0, help="Orbital altitude (km)")
+    p_thm.add_argument("--beta", type=float, default=22.0, help="Orbital beta angle (deg)")
+    p_thm.add_argument("--kp", type=float, default=5.0, help="Geomagnetic Kp index")
+    p_thm.add_argument("--load", type=float, default=85.0, help="Avionics internal dissipation (W)")
+    p_thm.add_argument("--no-burn", action="store_true", help="Disable active thruster firing heat pulse")
+    p_thm.set_defaults(func=cmd_thermal)
+
+    # pqc
+    p_pqc = subparsers.add_parser("pqc", help="Post-Quantum ML-KEM & CCSDS 355.0-B-2 SDLS telecommand security audit")
+    p_pqc.add_argument("--sat", default="STARLINK_LEO", help="Spacecraft ID")
+    p_pqc.add_argument("--op", default="EXECUTE_PROACTIVE_BURN", help="Command operation")
+    p_pqc.add_argument("--dv", type=float, default=0.325, help="Commanded delta-v (m/s)")
+    p_pqc.set_defaults(func=cmd_pqc)
+
+    # tour
+    p_tour = subparsers.add_parser("tour", help="Multi-target ADR Lambert rendezvous tour optimizer")
+    p_tour.add_argument("--dry-mass", type=float, default=450.0, help="Servicer dry mass (kg)")
+    p_tour.add_argument("--fuel", type=float, default=180.0, help="Initial propellant mass (kg)")
+    p_tour.add_argument("--isp", type=float, default=320.0, help="Thruster Isp (s)")
+    p_tour.add_argument("--alt", type=float, default=750.0, help="Starting altitude (km)")
+    p_tour.add_argument("--targets", type=int, default=4, help="Max debris targets to visit")
+    p_tour.set_defaults(func=cmd_tour)
 
 
     args = parser.parse_args()

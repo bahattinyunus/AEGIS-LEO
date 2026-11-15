@@ -23,6 +23,7 @@ SEA_LEVEL_DENSITY: float = 1.225           # kg / m^3 at sea level
 SPEED_OF_LIGHT: float = 299792458.0        # m/s
 SOLAR_CONSTANT: float = 1361.0             # W/m^2 at 1 AU
 STANDARD_GRAVITY: float = 9.80665          # m/s^2 (g0 for Tsiolkovsky equation)
+G0_M_S2: float = STANDARD_GRAVITY
 
 # Space Weather Baselines (NOAA SWPC / NASA OMNIWeb)
 QUIET_KP: float = 1.5                      # Quiet geomagnetic index

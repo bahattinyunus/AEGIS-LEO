@@ -39,6 +39,11 @@ from aegis_leo.physics.perturbations import (
     rk4_step_high_precision,
     HighPrecisionPerturbationEngine,
 )
+from aegis_leo.physics.thermal_analyzer import (
+    NodeThermalLimits,
+    ThermalAnalysisReport,
+    simulate_spacecraft_thermal_balance,
+)
 
 __all__ = [
     "kepler_to_cartesian",
@@ -67,4 +72,7 @@ __all__ = [
     "jd_to_mjd",
     "rk4_step_high_precision",
     "HighPrecisionPerturbationEngine",
+    "NodeThermalLimits",
+    "ThermalAnalysisReport",
+    "simulate_spacecraft_thermal_balance",
 ]

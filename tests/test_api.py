@@ -240,4 +240,47 @@ def test_wave2_rest_endpoints():
     assert "ORBITAL DEBRIS ASSESSMENT REPORT" in r_odar.json()["odar_markdown"].upper()
 
 
+def test_wave3_v2_rest_endpoints():
+    r_adcs = client.post("/api/astrodynamics/adcs-slew", json={
+        "target_roll_deg": 0.0,
+        "target_pitch_deg": 35.0,
+        "target_yaw_deg": -20.0,
+        "altitude_km": 550.0,
+        "kp_storm": 6.0,
+        "duration_s": 90.0,
+    })
+    assert r_adcs.status_code == 200
+    assert r_adcs.json()["burn_attitude_ready"] is True
+
+    r_thm = client.post("/api/physics/thermal-analysis", json={
+        "altitude_km": 550.0,
+        "beta_angle_deg": 22.0,
+        "kp_storm": 5.0,
+        "avionics_load_w": 85.0,
+        "burn_active": True,
+    })
+    assert r_thm.status_code == 200
+    assert r_thm.json()["all_nodes_within_limits"] is True
+
+    r_pqc = client.post("/api/security/pqc-verify", json={
+        "spacecraft_id": "STARLINK_LEO",
+        "command_op": "EXECUTE_PROACTIVE_BURN",
+        "delta_v_m_s": 0.325,
+    })
+    assert r_pqc.status_code == 200
+    assert r_pqc.json()["authentic_command_verified"] is True
+    assert r_pqc.json()["replay_attack_blocked"] is True
+
+    r_tour = client.post("/api/adr/lambert-tour", json={
+        "servicer_dry_mass_kg": 450.0,
+        "initial_fuel_kg": 180.0,
+        "isp_s": 320.0,
+        "start_altitude_km": 750.0,
+        "max_targets": 4,
+    })
+    assert r_tour.status_code == 200
+    assert r_tour.json()["targets_visited"] == 4
+
+
+
 

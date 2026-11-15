@@ -33,6 +33,9 @@ from aegis_leo.physics.atmosphere_models import compare_atmospheric_models
 from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
 from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay
 from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
+from aegis_leo.physics.thermal_analyzer import simulate_spacecraft_thermal_balance
+from aegis_leo.astrodynamics.attitude_adcs import simulate_attitude_slew
+from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 from aegis_leo.risk.adri import ADRICalculator
 from aegis_leo.risk.foster_bplane import compute_bplane_conjunction_risk
 
@@ -65,6 +68,9 @@ class MissionSimulationReport:
     avoidance_maneuver: Dict[str, Any]
     swarm_consensus: Dict[str, Any]
     compliance: Dict[str, Any]
+    attitude_adcs: Dict[str, Any] = field(default_factory=dict)
+    thermal_control: Dict[str, Any] = field(default_factory=dict)
+    pqc_security: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -184,6 +190,34 @@ def run_end_to_end_mission(config: MissionPipelineConfig) -> MissionSimulationRe
         max_duration_years=15.0,
     )
 
+    # 9. 6-DOF Attitude ADCS Slew-to-Burn Readiness
+    adcs_report = simulate_attitude_slew(
+        target_roll_deg=0.0,
+        target_pitch_deg=30.0,
+        target_yaw_deg=-15.0,
+        altitude_km=alt_km,
+        kp_storm=kp,
+        f10_7=f107,
+        duration_s=80.0,
+    )
+
+    # 10. Multi-Node Spacecraft Thermal Control Equilibrium
+    thermal_report = simulate_spacecraft_thermal_balance(
+        altitude_km=alt_km,
+        beta_angle_deg=eclipse_report.beta_angle_deg,
+        kp_storm=kp,
+        f10_7=f107,
+        avionics_load_w=min(120.0, config.bus_load_w * 0.5),
+        burn_active=True,
+    )
+
+    # 11. Post-Quantum Cryptographic (PQC) Telecommand Verification
+    pqc_report = run_pqc_telecommand_audit(
+        spacecraft_id=config.satellite_id,
+        command_op="EXECUTE_PROACTIVE_BURN",
+        delta_v_m_s=float(maneuver["proactive_burn"].get("delta_v_m_s", 0.325)),
+    )
+
     # Compute overall Mission Readiness Score (0 - 100)
     score = 100.0
     if not eclipse_report.power_margin_positive:
@@ -250,5 +284,24 @@ def run_end_to_end_mission(config: MissionPipelineConfig) -> MissionSimulationRe
             "nasa_std_8719_compliant": nasa_is_compliant,
             "fcc_5yr_compliant": lifetime.fcc_5year_compliant,
             "estimated_lifetime_years": lifetime.estimated_lifetime_years,
+        },
+        attitude_adcs={
+            "burn_attitude_ready": adcs_report.burn_attitude_ready,
+            "settling_time_s": adcs_report.settling_time_s,
+            "final_pointing_error_arcsec": adcs_report.final_pointing_error_arcsec,
+            "peak_wheel_speed_rpm": adcs_report.peak_wheel_speed_rpm,
+        },
+        thermal_control={
+            "thermal_status": thermal_report.thermal_status,
+            "all_nodes_within_limits": thermal_report.all_nodes_within_limits,
+            "heater_energy_wh": thermal_report.heater_energy_wh,
+            "peak_aero_heating_w": thermal_report.peak_aero_heating_w,
+        },
+        pqc_security={
+            "algorithm": pqc_report.algorithm,
+            "authentic_command_verified": pqc_report.authentic_command_verified,
+            "replay_attack_blocked": pqc_report.replay_attack_blocked,
+            "tamper_attack_blocked": pqc_report.tamper_attack_blocked,
+            "merkle_root_hash": pqc_report.merkle_root_hash,
         },
     )

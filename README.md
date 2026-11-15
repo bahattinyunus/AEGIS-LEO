@@ -3,14 +3,14 @@
 # 🛡️ AEGIS-LEO
 ### *Autonomous Edge-AI & Physics-Informed Orbital Safety Shield*
 
-[![Version](https://img.shields.io/badge/Sürüm-v1.5.0-00d4ff?style=for-the-badge&logo=semanticrelease&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Sürüm-v2.0.0-00d4ff?style=for-the-badge&logo=semanticrelease&logoColor=white)](CHANGELOG.md)
 [![NASA Space Apps 2026](https://img.shields.io/badge/NASA%20Space%20Apps-2026%20Ankara-0B3D91.svg?style=for-the-badge&logo=nasa&logoColor=white)](https://www.spaceappschallenge.org/)
 [![Takım](https://img.shields.io/badge/Takım-AYAZ-ff6b35.svg?style=for-the-badge)]()
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)]()
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-40+%20Endpoints-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
-[![Streamlit](https://img.shields.io/badge/Streamlit-13%20Sekmeli%20HUD-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-365%2F365%20Geçti-10b981.svg?style=for-the-badge&logo=pytest&logoColor=white)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-45+%20Endpoints-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
+[![Streamlit](https://img.shields.io/badge/Streamlit-15%20Sekmeli%20HUD-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
+[![Testler](https://img.shields.io/badge/Testler-385%2F385%20Geçti-10b981.svg?style=for-the-badge&logo=pytest&logoColor=white)]()
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-eab308.svg?style=for-the-badge)](LICENSE)
 
 <br/>
@@ -42,12 +42,12 @@
 - [🤖 9-Ajanlı Otonom Sürü Zekası Mimarisi (Swarm Intelligence)](#-9-ajanlı-otonom-sürü-zekası-mimarisi-swarm-intelligence)
 - [⚡ Temel İnovasyonlar & Bilimsel Derinlik](#-temel-inovasyonlar--bilimsel-derinlik)
 - [🏗️ Sistem Mimarisi](#️-sistem-mimarisi)
-- [🖥️ 13 Sekmeli Görev Kontrol Merkezi (Streamlit + Three.js)](#️-13-sekmeli-görev-kontrol-merkezi-streamlit--threejs)
+- [🖥️ 15 Sekmeli Görev Kontrol Merkezi (Streamlit + Three.js)](#️-15-sekmeli-görev-kontrol-merkezi-streamlit--threejs)
 - [💻 Profesyonel Aegis CLI Rehberi](#-profesyonel-aegis-cli-rehberi)
-- [🌐 REST API Dokümantasyonu (FastAPI — 40+ Uç Nokta)](#-rest-api-dokümantasyonu-fastapi--40-uç-nokta)
+- [🌐 REST API Dokümantasyonu (FastAPI — 45+ Uç Nokta)](#-rest-api-dokümantasyonu-fastapi--45-uç-nokta)
 - [📋 NASA-STD-8719.14B & FCC 5-Yıl Uyumluluk Matrisi](#-nasa-std-871914b--fcc-5-yıl-uyumluluk-matrisi)
 - [📊 Vaka Analizi: NOAA G4/G5 Fırtınası Stres Testi](#-vaka-analizi-noaa-g4g5-fırtınası-stres-testi)
-- [🧪 Doğrulama & Test Paketi (365/365)](#-doğrulama--test-paketi-365365)
+- [🧪 Doğrulama & Test Paketi (385/385)](#-doğrulama--test-paketi-385385)
 - [🐳 Hızlı Kurulum & Docker Konteynerizasyonu](#-hızlı-kurulum--docker-konteynerizasyonu)
 - [👥 AYAZ Takımı & Lisans](#-ayaz-takımı--lisans)
 
@@ -159,6 +159,14 @@ $$\mathcal{L} = \mathcal{L}_{veri} + \lambda_{fizik} \left\| a_{drag}^{pred} - \
 
 ---
 
+### 6. 6-DOF ADCS, Çok Düğümlü Termal Kontrol, Post-Kuantum Güvenlik & Lambert ADR Turu *(v2.0.0)*
+* **6-DOF Kuaterniyon ADCS & Tepki Tekeri Piramidi (`attitude_adcs.py`):** Euler dönme dinamiği, yerçekimi gradyanı + fırtına aerodinamik bozucu torkları, 4-tekerlekli RWA piramit ($\mathbf{W}^+$) tahsisi, manyetorker ($\mathbf{h}_{rw} \times \mathbf{B}$) momentum boşaltımı ve ateşleme öncesi slew-to-burn yerleşme doğrulaması.
+* **5-Düğümlü Yörünge Termal Denge Motoru (`thermal_analyzer.py`):** Güneş paneli, ana gövde, Edge-AI aviyonik, batarya ve itki tankı düğümleri arasında doğrudan Güneş akısı, Dünya albedosu, Dünya kızılötesi (OLR), VLEO fırtına aerodinamik ısınması ($Q_{aero} = \frac{1}{2}\rho v^3 C_h A$) ve Stefan-Boltzmann $T^4$ ışınım dengesi.
+* **Post-Kuantum Kriptografi & CCSDS 355.0-B-2 SDLS (`pqc_telecommand.py`):** Negasiklik polinom halkası $\mathcal{R}_q = \mathbb{Z}_{3329}[X]/(X^{64}+1)$ üzerinde Module-LWE (ML-KEM) anahtar kapsülleme, HMAC-SHA3-256 telekomut doğrulama, anti-replay sekans penceresi ve Merkle komut zinciri.
+* **Evrensel Değişkenli Lambert Çözücü & Çoklu-ADR Turu (`lambert_tour.py`):** Stumpff $C(z), S(z)$ evrensel değişkenli Lambert iki nokta sınır değer çözücüsü ve $J_2$ düğüm presesyonu ($\dot{\Omega}$) destekli çok hedefli aktif enkaz temizleme turu optimizasyonu.
+
+---
+
 ## 🏗️ Sistem Mimarisi
 
 ```mermaid
@@ -167,9 +175,10 @@ flowchart LR
         NOAA["NOAA SWPC / OMNIWeb"]
         CEL["CelesTrak TLE / CCSDS CDM"]
     end
-    subgraph Fizik["⚙️ Fizik & Yörünge Çekirdeği"]
-        PROP["Cowell RK4 + J2 + SRP/3.Cisim"]
+    subgraph Fizik["⚙️ Fizik, ADCS & Termal"]
+        PROP["Cowell RK4 + J2 + Lambert"]
         ATM["Jacchia-77 / NRLMSISE-00"]
+        ADCS["6-DOF RWA/MTQ + 5-Node Termal"]
         COMMS["Pass Scheduler + Eclipse/Power"]
     end
     subgraph Zeka["🧠 Risk, Navigasyon & Yapay Zeka"]
@@ -177,14 +186,15 @@ flowchart LR
         AI["INT8 PINN + SCP/MPC + VLEO L1"]
         NAV["Gauss IOD + EKF/UKF + Radar CFAR"]
     end
-    subgraph Sürü["🤖 Sürü & Uyumluluk"]
+    subgraph Sürü["🤖 Sürü, PQC & Uyumluluk"]
         SWARM["9-Ajanlı BFT Konsensüs"]
-        ADR["EDT / Lazer LODR / 6-DOF ADR"]
+        PQC["ML-KEM + CCSDS 355.0-B-2 SDLS"]
+        ADR["EDT / Lazer LODR / Çoklu-ADR Turu"]
         COMP["NASA-STD-8719.14B & ODAR"]
     end
     subgraph Arayüz["🖥️ Görev Kontrol"]
-        UI["13 Sekmeli Streamlit + Three.js"]
-        API["FastAPI (40+ Endpoint) & CLI"]
+        UI["15 Sekmeli Streamlit + Three.js"]
+        API["FastAPI (45+ Endpoint) & CLI"]
     end
 
     Veri --> Fizik --> Zeka --> Sürü --> Arayüz
@@ -192,7 +202,7 @@ flowchart LR
 
 ---
 
-## 🖥️ 13 Sekmeli Görev Kontrol Merkezi (Streamlit + Three.js)
+## 🖥️ 15 Sekmeli Görev Kontrol Merkezi (Streamlit + Three.js)
 
 Arayüzü başlatmak için:
 ```bash
@@ -214,6 +224,8 @@ streamlit run app.py
 | **11** | 📑 **CCSDS CDM & NASA ODAR** | Resmi NASA Section 4 ODAR Markdown ihracı ve CCSDS KVN/XML mesajları |
 | **12** | 🔬 **Atmosfer Fiziği & Radyasyon** | Jacchia-77 vs NRLMSISE-00 yoğunluk eğrileri ve SAA/SPE TMR bit-flip testi |
 | **13** | 🛰️ **Yer İstasyonu, Tutulma & Tam Görev** | AOS/LOS geçiş, RF/Optik link marjı, Beta/DoD döngüsü ve End-to-End Görev Hattı |
+| **14** | 🧭 **6-DOF ADCS & Termal Kontrol** | Kuaterniyon slew-to-burn, 4-tekerlek RWA piramidi, MTQ boşaltımı ve 5-düğüm termal denge |
+| **15** | 🔐 **Kuantum-Güvenli Telekomut & Çoklu-ADR Turu** | Post-Kuantum ML-KEM + CCSDS SDLS doğrulama ve Lambert çoklu-enkaz ADR turu |
 
 ---
 
@@ -226,6 +238,10 @@ python -m aegis_leo.cli <komut> [seçenekler]
 | Komut | Açıklama | Örnek Kullanım |
 | :--- | :--- | :--- |
 | `mission` | **Uçtan uca tam entegre otonom görev hattı** | `python -m aegis_leo.cli mission --sat STARLINK_LEO --band X_BAND` |
+| `adcs` | **6-DOF Kuaterniyon ADCS slew & RWA simülasyonu** | `python -m aegis_leo.cli adcs --pitch 35 --yaw -20 --alt 550` |
+| `thermal` | **5-Düğümlü uzay aracı yörünge termal dengesi** | `python -m aegis_leo.cli thermal --alt 550 --beta 22 --kp 6.0` |
+| `pqc` | **Post-Kuantum ML-KEM & CCSDS SDLS siber denetimi** | `python -m aegis_leo.cli pqc --sat STARLINK_LEO --dv 0.325` |
+| `tour` | **Çoklu-enkaz Lambert ADR randevu turu planlayıcı** | `python -m aegis_leo.cli tour --fuel 180 --targets 4` |
 | `passes` | **Yer istasyonu AOS/LOS & RF/Optik link bütçesi** | `python -m aegis_leo.cli passes --alt 550 --inc 53 --band KA_BAND` |
 | `eclipse` | **Yörünge Beta açısı, tutulma & pil DoD bütçesi** | `python -m aegis_leo.cli eclipse --alt 550 --inc 97.6 --doy 172` |
 | `odar` | **Resmi NASA-STD-8719.14B ODAR raporu üretir** | `python -m aegis_leo.cli odar --sat SAT-01 --pc 1e-5` |
@@ -240,7 +256,7 @@ python -m aegis_leo.cli <komut> [seçenekler]
 
 ---
 
-## 🌐 REST API Dokümantasyonu (FastAPI — 40+ Uç Nokta)
+## 🌐 REST API Dokümantasyonu (FastAPI — 45+ Uç Nokta)
 
 ```bash
 uvicorn backend.main:app --reload --port 8000
@@ -248,10 +264,15 @@ uvicorn backend.main:app --reload --port 8000
 * **Swagger UI:** `http://localhost:8000/docs` | **Three.js Web HUD:** `http://localhost:8000/dashboard`
 
 <details>
-<summary><b>📡 Tüm REST API Uç Noktalarını Genişlet (40+ Endpoint)</b></summary>
+<summary><b>📡 Tüm REST API Uç Noktalarını Genişlet (45+ Endpoint)</b></summary>
 
+* **6-DOF ADCS, Termal, Post-Kuantum Güvenlik & Lambert ADR Turu (v2.0.0):**
+  * `POST /api/astrodynamics/adcs-slew`: 6-DOF Kuaterniyon slew-to-burn ve 4-tekerlek RWA/MTQ simülasyonu.
+  * `POST /api/physics/thermal-analysis`: 5-düğümlü uzay aracı yörünge termal dengesi ve fırtına aerodinamik ısınması.
+  * `POST /api/security/pqc-verify`: Post-Kuantum ML-KEM + CCSDS 355.0-B-2 SDLS telekomut imzalama ve siber saldırı denetimi.
+  * `POST /api/adr/lambert-tour`: Evrensel değişkenli Lambert randevu ve çok hedefli ADR turu optimizasyonu.
 * **Tam Görev & İletişim / Güç (v1.5.0):**
-  * `POST /api/mission/end-to-end`: Tüm alt sistemleri birleştiren uçtan uca görev doğrulama hattı.
+  * `POST /api/mission/end-to-end`: Tüm 11 alt sistemi birleştiren uçtan uca görev doğrulama hattı.
   * `POST /api/comms/pass-schedule`: Yer istasyonu AOS/LOS geçiş penceresi ve RF/Optik bağlantı bütçesi.
   * `POST /api/physics/eclipse-power`: Beta açısı, çift konili tutulma ve batarya DoD güç bütçesi.
 * **Risk, Çarpışma & Uyumluluk:**
@@ -300,14 +321,14 @@ uvicorn backend.main:app --reload --port 8000
 
 ---
 
-## 🧪 Doğrulama & Test Paketi (365/365)
+## 🧪 Doğrulama & Test Paketi (385/385)
 
 ```bash
 pytest -q
-# 365 passed in 27.96s (%100 Başarılı)
+# 385 passed in 29.77s (%100 Başarılı)
 ```
 
-Tüm fizik motorları, BFT sürü konsensüsü, ADR (EDT + Lazer + 6-DOF), navigasyon (EKF/UKF + Gauss IOD), yer istasyonu link bütçesi, tutulma güç döngüsü, uçtan uca görev hattı ve FastAPI uç noktaları **365 otomatik birim ve entegrasyon testi** ile doğrulanmıştır.
+Tüm fizik motorları, 6-DOF ADCS & RWA/MTQ yönelim kontrolü, 5-düğümlü termal denge, Post-Kuantum ML-KEM CCSDS SDLS telekomut güvenliği, Lambert çoklu-ADR turu, BFT sürü konsensüsü, ADR (EDT + Lazer + 6-DOF), navigasyon (EKF/UKF + Gauss IOD), yer istasyonu link bütçesi, tutulma güç döngüsü, uçtan uca görev hattı ve FastAPI uç noktaları **385 otomatik birim ve entegrasyon testi** ile doğrulanmıştır.
 
 ---
 

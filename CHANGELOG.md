@@ -5,6 +5,30 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-15
+
+### Added
+- **6-DOF Attitude Determination & Control System (ADCS) Engine (`aegis_leo/astrodynamics/attitude_adcs.py`)**:
+  - Full rigid-body Euler rotational dynamics coupled with unit-quaternion kinematics ($\dot{\mathbf{q}} = \frac{1}{2}\boldsymbol{\Omega}(\boldsymbol{\omega})\mathbf{q}$).
+  - Gravity-gradient, storm-responsive aerodynamic weathercock, and solar radiation pressure disturbance torques.
+  - 4-wheel symmetric pyramid Reaction Wheel Assembly (RWA) Moore-Penrose pseudoinverse allocation ($\mathbf{W}^+$) with wheel speed/momentum saturation guards.
+  - Magnetic Torque Rod (MTQ) cross-product momentum dumping ($\mathbf{m}_{dump} = k (\mathbf{h}_{rw} \times \mathbf{B}) / \|\mathbf{B}\|^2$) and pre-burn slew-to-attitude readiness verification.
+- **Universal-Variable Lambert Rendezvous Solver & Multi-Debris ADR Tour Optimizer (`aegis_leo/astrodynamics/lambert_tour.py`)**:
+  - Universal variable & Stumpff $C(z), S(z)$ two-point orbital boundary value solver ($\mathbf{r}_1, \mathbf{r}_2, \Delta t \to \mathbf{v}_1, \mathbf{v}_2$).
+  - Secular $J_2$ nodal precession ($\dot{\Omega}$) drift phasing rate estimator for low-fuel orbital plane alignment.
+  - Combinatorial Multi-Target Active Debris Removal (ADR) tour planner sequencing high-risk LEO debris targets within servicer propellant limits.
+- **5-Node Spacecraft Orbital Thermal Control & Radiative Equilibrium Engine (`aegis_leo/physics/thermal_analyzer.py`)**:
+  - Coupled transient orbital thermal network across `SOLAR_ARRAY`, `BUS_STRUCTURE`, `EDGE_AI_AVIONICS`, `BATTERY_PACK`, and `PROPULSION_UNIT`.
+  - Models direct solar flux, Earth albedo, Earth outgoing longwave IR (OLR), VLEO/storm free-molecular aerodynamic heating ($Q_{aero} = \frac{1}{2}\rho v^3 C_h A$), active thermostat survival heaters, and Stefan-Boltzmann $T^4$ deep-space radiative cooling.
+- **Post-Quantum Cryptographic (PQC) Space Data Link Security (`aegis_leo/security/pqc_telecommand.py`)**:
+  - Module-LWE (ML-KEM / Kyber-inspired) lattice key encapsulation over the negacyclic polynomial ring $\mathcal{R}_q = \mathbb{Z}_{3329}[X]/(X^{64} + 1)$ with 100% exact shared key recovery.
+  - CCSDS 355.0-B-2 Space Data Link Security (SDLS) telecommand frame authentication (HMAC-SHA3-256), monotonic anti-replay sliding window sequence counter, tamper-evident Merkle command chain, and adversarial intrusion prevention ledger.
+- **Expanded Mission Pipeline, 15-Tab Streamlit HUD, CLI & 45+ FastAPI Endpoints**:
+  - Integrated ADCS slew readiness, 5-node thermal safety, and PQC command verification into `run_end_to_end_mission`.
+  - Added REST endpoints: `POST /api/astrodynamics/adcs-slew`, `POST /api/physics/thermal-analysis`, `POST /api/security/pqc-verify`, `POST /api/adr/lambert-tour`.
+  - Added CLI subcommands: `aegis adcs`, `aegis thermal`, `aegis pqc`, `aegis tour`.
+  - Added Streamlit Mission Control Tabs 14 & 15 (**15 Operational Tabs** total) and expanded the automated test suite to **385/385 passing tests**.
+
 ## [1.5.0] - 2026-11-15
 
 ### Added

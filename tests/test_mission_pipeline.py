@@ -23,3 +23,7 @@ def test_end_to_end_mission_pipeline():
     assert d["conjunction_risk"]["foster_pc"] >= 0.0
     assert d["swarm_consensus"]["weighted_approval"] >= 0.0
     assert "nasa_std_8719_compliant" in d["compliance"]
+    assert d["attitude_adcs"]["burn_attitude_ready"] is True
+    assert d["thermal_control"]["all_nodes_within_limits"] is True
+    assert d["pqc_security"]["authentic_command_verified"] is True
+    assert d["pqc_security"]["replay_attack_blocked"] is True
