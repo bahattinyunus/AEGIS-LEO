@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS-LEO | Official 7-Slide NASA Space Apps 2026 Presentation</title>
+    <style>
+        :root {
+            --bg-dark: #050811;
+            --bg-card: rgba(15, 23, 42, 0.88);
+            --cyan: #38bdf8;
+            --emerald: #34d399;
+            --amber: #fbbf24;
+            --rose: #f43f5e;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow-x: hidden;
+        }
+        .deck {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+            padding: 24px;
+        }
+        .slide {
+            width: 1120px;
+            height: 630px;
+            background: radial-gradient(circle at 80% 15%, #0f2442 0%, #050811 75%);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 16px;
+            padding: 36px 46px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+            page-break-after: always;
+        }
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+            padding-bottom: 12px;
+        }
+        .slide-tag {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--cyan);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .slide-num {
+            font-family: monospace;
+            font-size: 0.85rem;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--cyan);
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+        }
+        h1 { font-size: 2.1rem; color: #ffffff; line-height: 1.2; }
+        h2 { font-size: 1.45rem; color: var(--cyan); margin-bottom: 8px; }
+        h3 { font-size: 1.05rem; color: var(--emerald); margin-bottom: 6px; }
+        p, li { font-size: 0.94rem; line-height: 1.48; color: var(--text); }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            border-radius: 12px;
+            padding: 16px 18px;
+        }
+        .metric-big {
+            font-family: monospace;
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--cyan);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            background: var(--bg-card);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th { background: rgba(56, 189, 248, 0.15); color: var(--cyan); font-weight: 700; }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--muted);
+            border-top: 1px solid rgba(148, 163, 184, 0.15);
+            padding-top: 10px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-right: 6px;
+        }
+        .b-cyan { background: rgba(56, 189, 248, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
+        .b-emerald { background: rgba(52, 211, 153, 0.2); color: var(--emerald); border: 1px solid var(--emerald); }
+        .b-amber { background: rgba(251, 191, 36, 0.2); color: var(--amber); border: 1px solid var(--amber); }
+        @media print {
+            body { background: #050811; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .deck { padding: 0; gap: 0; }
+            .slide { width: 100vw; height: 100vh; border-radius: 0; border: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="deck">
+
+    <!-- SLIDE 1 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">2026 NASA Space Apps Challenge &bull; Ankara &bull; Team AYAZ</span>
+            <span class="slide-num">SLIDE 1 / 7</span>
+        </div>
+        <div>
+            <span class="badge b-cyan">Release v2.0.0</span>
+            <span class="badge b-emerald">385 / 385 Tests Passing (100%)</span>
+            <span class="badge b-amber">NASA-STD-8719.14B &amp; FCC 5-Year Compliant</span>
+            <h1 style="margin-top: 14px;">🛡️ AEGIS-LEO</h1>
+            <h2>Autonomous Edge-AI &amp; Physics-Informed Orbital Safety Shield</h2>
+            <p style="color: var(--muted); max-width: 900px; margin-top: 8px;">
+                An onboard space-weather-aware astrodynamics, sub-millisecond Physics-Informed Neural Network (PINN),
+                and 9-agent Byzantine Fault-Tolerant (BFT) swarm intelligence platform protecting Low Earth Orbit (LEO) spacecraft during solar storms and radio blackouts.
+            </p>
+        </div>
+        <div class="grid-3">
+            <div class="card">
+                <div class="metric-big">&lt; 150 &micro;s</div>
+                <h3>Onboard INT8 PINN</h3>
+                <p>Sub-millisecond inference (&lt;10 KB RAM) with Triple Modular Redundancy (TMR) SEU fault masking.</p>
+            </div>
+            <div class="card">
+                <div class="metric-big">88% Saved</div>
+                <h3>Proactive &Delta;v Phasing</h3>
+                <p>Early 0.325 m/s Vis-Viva &amp; SCP/MPC avoidance burns replace costly 2.80 m/s reactive maneuvers.</p>
+            </div>
+            <div class="card">
+                <div class="metric-big">9 Agents</div>
+                <h3>BFT Swarm + PQC SDLS</h3>
+                <p>Weighted Byzantine quorum with NASA Compliance Watchdog VETO and ML-KEM Post-Quantum signing.</p>
+            </div>
+        </div>
+        <div class="footer">
+            <span>Lead Architect: Bahattin Yunus Çetin (@bahattinyunus) | Team AYAZ</span>
+            <span>https://github.com/bahattinyunus/AEGIS-LEO</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 2 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">The Critical Problem &bull; Historical Evidence</span>
+            <span class="slide-num">SLIDE 2 / 7</span>
+        </div>
+        <div>
+            <h2>⚠️ Why Static Ground-Based Conjunction Warnings Fail in Solar Storms</h2>
+            <p style="color: var(--muted);">Standard LEO operations depend on static ground radar Conjunction Data Messages (CDMs) that become obsolete within hours during geomagnetic storms.</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <h3>1. Thermospheric Expansion (300%–800% Drag Surge)</h3>
+                <ul>
+                    <li><strong>February 2022 Starlink Event:</strong> 38 of 49 newly launched satellites were lost when a geomagnetic storm unexpectedly increased atmospheric density by ~50%.</li>
+                    <li><strong>May 2024 G5 Superstorm:</strong> Extreme solar heating expanded the thermosphere 6x–8x, causing LEO satellites to drift <strong>+15 to +26 km along-track</strong> and invalidating all static collision predictions.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>2. The Ground Blackout Blind Spot (PCA)</h3>
+                <ul>
+                    <li>During severe storms, <strong>Polar Cap Absorption (PCA)</strong> and ionospheric scintillation sever RF telecommand links with ground stations.</li>
+                    <li>When ground operators are blind and unable to uplink commands, the spacecraft <strong>must sense thermospheric drag and execute autonomous collision avoidance onboard</strong>.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="card" style="border-color: var(--rose);">
+            <strong style="color: var(--rose);">Key Insight:</strong> Orbital safety cannot rely solely on ground-in-the-loop CDMs during solar storms; physics-informed intelligence must live onboard the spacecraft flight computer.
+        </div>
+        <div class="footer">
+            <span>AEGIS-LEO Mission Brief</span>
+            <span>Slide 2 of 7</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 3 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">Core Scientific Innovation &bull; Physics + Edge-AI</span>
+            <span class="slide-num">SLIDE 3 / 7</span>
+        </div>
+        <div>
+            <h2>🧠 Multi-Model Thermospheric Physics, Foster B-Plane &amp; INT8 PINN</h2>
+        </div>
+        <div class="grid-3">
+            <div class="card">
+                <h3>1. 3-Model Thermosphere</h3>
+                <ul>
+                    <li>Simultaneously solves <strong>Jacchia-77</strong>, <strong>NRLMSISE-00</strong>, and <strong>Exponential</strong> density profiles from live NOAA Kp &amp; F10.7 indices.</li>
+                    <li>Coupled with <strong>Cowell RK4</strong> propagator (J2, Solar Radiation Pressure &amp; Battin Sun/Moon 3rd-body perturbations).</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>2. A-DRI &amp; Foster B-Plane</h3>
+                <ul>
+                    <li>2D Gauss-Legendre numerical <strong>Foster (1992)</strong> &amp; <strong>Chan (1997)</strong> B-plane collision probability (Pc).</li>
+                    <li>Unified <strong>A-DRI</strong> index: <code>0.40 C_prob + 0.25 W_drag + 0.20 D_ord + 0.15 F_dv</code>.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>3. Radiation-Hardened AI</h3>
+                <ul>
+                    <li>PyTorch <strong>PINN</strong> trained with physical drag-residual loss.</li>
+                    <li><strong>INT8 Quantized (&lt;10 KB)</strong>, &lt;150 &micro;s latency.</li>
+                    <li><strong>Triple Modular Redundancy (TMR)</strong> masks SAA Single-Event Upset bit-flips.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Closed-Loop Trajectory &amp; Attitude Synthesis</h3>
+            <p>Combines <strong>Vis-Viva micro-phasing</strong>, <strong>Sequential Convex Programming (SCP/MPC)</strong>, and <strong>VLEO L1 Adaptive Drag Make-Up</strong> with <strong>6-DOF Quaternion ADCS (4-Wheel RWA Pyramid + Magnetorquer Desaturation)</strong> and <strong>5-Node Orbital Thermal Equilibrium</strong> verification prior to thruster ignition.</p>
+        </div>
+        <div class="footer">
+            <span>AEGIS-LEO Scientific Core</span>
+            <span>Slide 3 of 7</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 4 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">Autonomous Governance &bull; Swarm &amp; Post-Quantum Security</span>
+            <span class="slide-num">SLIDE 4 / 7</span>
+        </div>
+        <div>
+            <h2>🤖 9-Agent BFT Swarm Intelligence &amp; Post-Quantum (ML-KEM) Security</h2>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Agent ID</th>
+                    <th>Autonomous Onboard Role</th>
+                    <th>Vote Weight</th>
+                    <th>Special Authority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>A1 &amp; A2</strong></td><td>SolarStormAgent &amp; ThermosphereAgent (Kp/F10.7 surge &amp; along-track drift)</td><td>1.0x each</td><td>Storm Alert Trigger</td></tr>
+                <tr><td><strong>A3 &amp; A4</strong></td><td>RiskAssessmentAgent (Foster Pc/A-DRI) &amp; AstrodynamicsAgent (Vis-Viva/MPC)</td><td>1.5x each</td><td>Burn Synthesis</td></tr>
+                <tr><td><strong>A5 &amp; A6</strong></td><td>EdgeInferenceAgent (INT8 PINN + TMR) &amp; ConstellationAgent (Walker ISL/FedProx)</td><td>1.2x / 1.0x</td><td>SEU &amp; Slot Guard</td></tr>
+                <tr><td><strong>A7</strong></td><td><strong>ComplianceWatchdogAgent (NASA-STD-8719.14B &amp; Passivation Reserve &ge;2 kg)</strong></td><td><strong>2.0x</strong></td><td><strong>🚨 ABSOLUTE VETO</strong></td></tr>
+                <tr><td><strong>A8 &amp; A9</strong></td><td>ReentryDisposalAgent (FCC 5-Yr / Point Nemo) &amp; MissionCommanderAgent</td><td>1.0x each</td><td>BFT Quorum &ge;70% Sign</td></tr>
+            </tbody>
+        </table>
+        <div class="card">
+            <h3>🔐 Post-Quantum Space Data Link Security (CCSDS 355.0-B-2 SDLS)</h3>
+            <p>Uses <strong>Module-LWE (ML-KEM)</strong> lattice key encapsulation over <code>Z_3329[X]/(X^64 + 1)</code> (100% key agreement) + <strong>HMAC-SHA3-256</strong>, monotonic anti-replay sliding window, and a tamper-evident <strong>Merkle Command Chain</strong> to block replay, tampering, and rogue ground-station spoofing.</p>
+        </div>
+        <div class="footer">
+            <span>AEGIS-LEO Swarm &amp; Security Architecture</span>
+            <span>Slide 4 of 7</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 5 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">Full-Stack Platform &bull; 15-Tab HUD, 45+ REST APIs &amp; CLI</span>
+            <span class="slide-num">SLIDE 5 / 7</span>
+        </div>
+        <div>
+            <h2>🖥️ 15-Tab Mission Control Center, 45+ FastAPI Endpoints &amp; CLI</h2>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <h3>Interactive 15-Tab Streamlit + Three.js HUD</h3>
+                <ul>
+                    <li><strong>Tabs 1–4:</strong> 3D Orbital Globe, 9-Agent BFT Swarm Matrix, Walker Constellation Screening, SCP/MPC Convex Avoidance.</li>
+                    <li><strong>Tabs 5–9:</strong> X-Band Radar/LIDAR Swerling Lab, Gauss Optical IOD &amp; Joseph EKF/UKF, 6-DOF Robotic/EDT/Laser ADR, VLEO L1 Control, ISL Federated Learning.</li>
+                    <li><strong>Tabs 10–15:</strong> Point Nemo Monte Carlo Footprint, CCSDS CDM &amp; NASA ODAR Export, Thermosphere/Radiation TMR, Ground Pass &amp; Eclipse/DoD Budget, <strong>6-DOF ADCS &amp; 5-Node Thermal</strong>, <strong>PQC Security &amp; Multi-ADR Lambert Tour</strong>.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Production CLI &amp; 45+ FastAPI Endpoints</h3>
+                <ul>
+                    <li><code>aegis mission</code> — 11-stage end-to-end autonomous mission verification pipeline.</li>
+                    <li><code>aegis adcs</code> / <code>aegis thermal</code> — 6-DOF RWA slew &amp; 5-node orbital thermal equilibrium.</li>
+                    <li><code>aegis pqc</code> / <code>aegis tour</code> — ML-KEM CCSDS SDLS audit &amp; Lambert multi-debris ADR tour.</li>
+                    <li><code>aegis passes</code> / <code>aegis eclipse</code> / <code>aegis odar</code> — RF/Optical link budget, Beta/DoD &amp; NASA Section 4 ODAR generator.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer">
+            <span>AEGIS-LEO Mission Control Stack</span>
+            <span>Slide 5 of 7</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 6 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">Quantitative Validation &bull; NOAA G4/G5 Storm Benchmark</span>
+            <span class="slide-num">SLIDE 6 / 7</span>
+        </div>
+        <div>
+            <h2>📊 Benchmark: 548 km SSO Satellite Under NOAA G4 Geomagnetic Storm</h2>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Benchmark Metric</th>
+                    <th>Without AEGIS-LEO (Static CDM)</th>
+                    <th>With AEGIS-LEO v2.0.0</th>
+                    <th>Verified Mission Impact</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Thermospheric Density (&rho;)</strong></td><td>2.45e-13 kg/m&sup3; (Static)</td><td><strong>1.44e-12 kg/m&sup3; (Dynamic)</strong></td><td>5.9x storm surge tracked live</td></tr>
+                <tr><td><strong>Along-Track Orbital Drift</strong></td><td>0.0 km (Unmodeled)</td><td><strong>+16.72 km Detected</strong></td><td>Eliminates blind-spot position error</td></tr>
+                <tr><td><strong>A-DRI Risk Score</strong></td><td>Stale / Ground Blackout</td><td><strong>0.842 (CRITICAL) &rarr; 0.146 (SAFE)</strong></td><td>Autonomous collision clearance</td></tr>
+                <tr><td><strong>Avoidance Burn (&Delta;v)</strong></td><td>2.80 m/s (Late Reactive)</td><td><strong>0.325 m/s (Proactive Burn)</strong></td><td><strong>Up to 88% propellant saved</strong></td></tr>
+                <tr><td><strong>6-DOF ADCS &amp; 5-Node Thermal</strong></td><td>Unverified Attitude/Thermal</td><td><strong>52.5 s Settle / 79.7 arcsec / Nominal</strong></td><td>Closed-loop thruster burn readiness</td></tr>
+                <tr><td><strong>Multi-Debris Lambert ADR Tour</strong></td><td>Single-Target Deorbit</td><td><strong>4 Major Debris Targets / 97.9 kg Fuel</strong></td><td>-37.7 Kessler priority risk score</td></tr>
+            </tbody>
+        </table>
+        <div class="footer">
+            <span>385 / 385 Automated Pytest Unit &amp; Integration Tests Passing</span>
+            <span>Slide 6 of 7</span>
+        </div>
+    </section>
+
+    <!-- SLIDE 7 -->
+    <section class="slide">
+        <div class="slide-header">
+            <span class="slide-tag">NASA Data Integration &bull; Reproducibility &amp; Impact</span>
+            <span class="slide-num">SLIDE 7 / 7</span>
+        </div>
+        <div>
+            <h2>🌐 NASA Data Ecosystem, Standards &amp; Instant Reproducibility</h2>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <h3>NASA &amp; Partner Data Integrated</h3>
+                <ul>
+                    <li><strong>NASA OMNIWeb Plus &amp; NOAA SWPC:</strong> Planetary K-index (Kp), F10.7 solar flux &amp; geomagnetic storm presets.</li>
+                    <li><strong>NASA CCMC &amp; ODPO:</strong> NRLMSISE-00 / Jacchia-77 thermosphere models, NASA ORDEM debris density &amp; Standard Breakup Model.</li>
+                    <li><strong>NASA-STD-8719.14B &amp; CCSDS:</strong> Section 4 ODAR generator, FCC 5-Year rule, CCSDS 508.0-B-1 CDM (XML/KVN), OEM/OPM &amp; SDLS 355.0-B-2.</li>
+                    <li><strong>CelesTrak / NORAD GP:</strong> Live TLE catalog &amp; SGP4 propagation.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Run &amp; Verify in 60 Seconds</h3>
+                <p style="font-family: monospace; font-size: 0.82rem; background: #020617; padding: 12px; border-radius: 8px; margin-top: 6px; color: var(--emerald);">
+                    git clone https://github.com/bahattinyunus/AEGIS-LEO.git<br/>
+                    cd AEGIS-LEO &amp;&amp; pip install -r requirements.txt<br/>
+                    pytest -q &nbsp;# 385 passed in 29s<br/>
+                    python -m aegis_leo.cli mission --sat SAT-01<br/>
+                    streamlit run app.py
+                </p>
+                <p style="margin-top: 10px; font-size: 0.85rem; color: var(--muted);">
+                    <strong>SI Disclosure:</strong> Developed by Team AYAZ using SI coding/visual tools as permitted by NASA Space Apps rules; zero NASA logos or emblems used.
+                </p>
+            </div>
+        </div>
+        <div class="footer">
+            <span>Thank You, NASA Space Apps Judges! &bull; Team AYAZ (Ankara)</span>
+            <span>Repository: https://github.com/bahattinyunus/AEGIS-LEO</span>
+        </div>
+    </section>
+
+</div>
+</body>
+</html>

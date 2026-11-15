@@ -11,6 +11,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-45+%20Endpoints-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
 [![Streamlit](https://img.shields.io/badge/Streamlit-15%20Sekmeli%20HUD-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
 [![Testler](https://img.shields.io/badge/Testler-385%2F385%20Geçti-10b981.svg?style=for-the-badge&logo=pytest&logoColor=white)]()
+[![Sunum: 7 Slayt](https://img.shields.io/badge/NASA%20Sunumu-7%20Slayt%20Pitch%20Deck-ec4899.svg?style=for-the-badge&logo=googleslides&logoColor=white)](PRESENTATION.md)
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-eab308.svg?style=for-the-badge)](LICENSE)
 
 <br/>
