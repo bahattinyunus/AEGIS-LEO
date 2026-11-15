@@ -34,6 +34,10 @@ from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay
 from aegis_leo.adr.electrodynamic_tether import compare_all_deorbit_methods
 from aegis_leo.adr.laser_ablation import simulate_laser_debris_engagement, LaserStationSpecs, DebrisTargetSpecs, LaserPlatformType
 from aegis_leo.agents.swarm_consensus import SwarmConsensusCoordinator
+from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
+from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
+from aegis_leo.compliance.odar_generator import generate_odar_report
+from aegis_leo.simulation.mission_pipeline import MissionPipelineConfig, run_end_to_end_mission
 
 
 def cmd_status(args):
@@ -301,6 +305,72 @@ def cmd_consensus(args):
     print("=" * 70 + "\n")
 
 
+def cmd_passes(args):
+    res = schedule_ground_passes(
+        altitude_km=args.alt,
+        inclination_deg=args.inc,
+        duration_hours=args.hours,
+        band=LinkBand(args.band.upper()),
+    )
+    print("\n" + "=" * 65)
+    print(f">> GROUND STATION PASS SCHEDULE ({res.band}, {res.simulation_duration_s/3600:.1f}h) <<")
+    print("=" * 65)
+    print(f"Total Passes:    {res.total_passes}")
+    print(f"Contact Time:    {res.total_contact_time_s/60.0:.1f} min")
+    print(f"Data Downlinked: {res.total_data_downlinked_mb:,.2f} MB")
+    print(f"Best Station:    {res.best_station or 'N/A'}")
+    for p in res.passes[:10]:
+        print(f"  - {p.station_name}: AOS={p.aos_time_s:.0f}s, Dur={p.duration_s:.0f}s, MaxEl={p.max_elevation_deg:.1f}°, Margin={p.mean_link_margin_db:.1f}dB, Vol={p.total_data_volume_mb:.1f}MB")
+    print("=" * 65 + "\n")
+
+
+def cmd_eclipse(args):
+    res = simulate_eclipse_and_power(
+        altitude_km=args.alt,
+        inclination_deg=args.inc,
+        day_of_year=args.doy,
+        bus_load_w=args.load,
+    )
+    print("\n" + "=" * 65)
+    print(">> ORBITAL ECLIPSE, BETA ANGLE & POWER BUDGET <<")
+    print("=" * 65)
+    print(f"Beta Angle:         {res.beta_angle_deg:.2f}° (SSO Req Inc: {res.sso_required_inclination_deg:.2f}°)")
+    print(f"Orbit Period:       {res.orbital_period_s/60.0:.2f} min")
+    print(f"Eclipse Fraction:   {res.eclipse_fraction*100:.1f}% ({res.eclipse_duration_s/60.0:.1f} min)")
+    print(f"Net Orbit Energy:   {res.net_orbit_energy_wh:+.2f} Wh ({'POSITIVE' if res.power_margin_positive else 'DEFICIT'})")
+    print(f"Max Battery DoD:    {res.max_dod_pct:.2f}% (Min SoC: {res.min_soc_pct:.2f}%)")
+    print(f"Thermal Envelope:   {res.temp_min_c:.1f}°C to {res.temp_max_c:.1f}°C")
+    print("=" * 65 + "\n")
+
+
+def cmd_odar(args):
+    sat = get_satellite_by_id(args.sat)
+    if not sat:
+        print(f"Error: Satellite '{args.sat}' not found.")
+        sys.exit(1)
+    md = generate_odar_report(satellite=sat, collision_pc=args.pc)
+    print(md)
+
+
+def cmd_mission(args):
+    rep = run_end_to_end_mission(MissionPipelineConfig(
+        satellite_id=args.sat,
+        storm_preset=args.storm,
+        miss_distance_km=args.miss,
+        link_band=args.band,
+    ))
+    print("\n" + "=" * 70)
+    print(f">> AEGIS-LEO END-TO-END MISSION REPORT: {rep.satellite_name} <<")
+    print("=" * 70)
+    print(f"Readiness Score:  {rep.mission_readiness_score}/100 [{rep.overall_status}]")
+    print(f"Space Weather:    {rep.space_weather['event_name']} (Kp={rep.space_weather['kp']})")
+    print(f"Eclipse / Power:  Beta={rep.eclipse_power['beta_angle_deg']}° | Net={rep.eclipse_power['net_orbit_energy_wh']} Wh | MaxDoD={rep.eclipse_power['max_dod_pct']}%")
+    print(f"Ground Comms:     {rep.ground_comms['total_passes']} passes | {rep.ground_comms['total_data_downlinked_mb']} MB ({rep.ground_comms['band']})")
+    print(f"Conjunction Risk: A-DRI={rep.conjunction_risk['a_dri']} | Foster Pc={rep.conjunction_risk['foster_pc']:.2e}")
+    print(f"Swarm Consensus:  {rep.swarm_consensus['status']} ({rep.swarm_consensus['weighted_approval']*100:.1f}%)")
+    print(f"Compliance:       NASA-8719={rep.compliance['nasa_std_8719_compliant']} | FCC-5Yr={rep.compliance['fcc_5yr_compliant']} ({rep.compliance['estimated_lifetime_years']:.2f} yr)")
+    print("=" * 70 + "\n")
+
 
 def main():
     parser = argparse.ArgumentParser(prog="aegis", description="AEGIS-LEO SSA Mission Control CLI")
@@ -398,6 +468,36 @@ def main():
     p_con.add_argument("--tca", type=float, default=1800.0, help="Time to closest approach (s)")
     p_con.add_argument("--dv", type=float, default=0.45, help="Nominal Delta-V required (m/s)")
     p_con.set_defaults(func=cmd_consensus)
+
+    # passes
+    p_pas = subparsers.add_parser("passes", help="Ground station AOS/LOS pass schedule & link budget")
+    p_pas.add_argument("--alt", type=float, default=550.0, help="Orbital altitude (km)")
+    p_pas.add_argument("--inc", type=float, default=53.0, help="Inclination (deg)")
+    p_pas.add_argument("--hours", type=float, default=12.0, help="Schedule duration (hours)")
+    p_pas.add_argument("--band", default="X_BAND", choices=["S_BAND", "X_BAND", "KA_BAND", "OPTICAL"], help="RF/Optical band")
+    p_pas.set_defaults(func=cmd_passes)
+
+    # eclipse
+    p_ecl = subparsers.add_parser("eclipse", help="Orbital beta angle, eclipse fraction & power budget")
+    p_ecl.add_argument("--alt", type=float, default=550.0, help="Orbital altitude (km)")
+    p_ecl.add_argument("--inc", type=float, default=97.6, help="Inclination (deg)")
+    p_ecl.add_argument("--doy", type=int, default=172, help="Day of year (1-366)")
+    p_ecl.add_argument("--load", type=float, default=180.0, help="Bus load power (W)")
+    p_ecl.set_defaults(func=cmd_eclipse)
+
+    # odar
+    p_odar = subparsers.add_parser("odar", help="Generate NASA-STD-8719.14B ODAR Markdown report")
+    p_odar.add_argument("--sat", default="SAT-01", help="Satellite ID")
+    p_odar.add_argument("--pc", type=float, default=1e-5, help="Collision probability")
+    p_odar.set_defaults(func=cmd_odar)
+
+    # mission
+    p_mis = subparsers.add_parser("mission", help="Run full integrated end-to-end mission simulation")
+    p_mis.add_argument("--sat", default="SAT-01", help="Satellite ID")
+    p_mis.add_argument("--storm", default="g4_severe", help="Space weather preset")
+    p_mis.add_argument("--miss", type=float, default=0.85, help="Miss distance (km)")
+    p_mis.add_argument("--band", default="X_BAND", help="Downlink band")
+    p_mis.set_defaults(func=cmd_mission)
 
 
     args = parser.parse_args()

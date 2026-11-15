@@ -5,6 +5,23 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-11-15
+
+### Added
+- **Ground Station Pass Scheduler & RF/Optical Link Budget (`aegis_leo/physics/pass_scheduler.py`)**:
+  - Topocentric SEZ look-angle kinematics (Azimuth, Elevation, Slant Range, Range Rate, Doppler shift).
+  - AOS/LOS pass window scheduling across global ground stations (Ankara, Svalbard, Goldstone, Madrid, Canberra).
+  - Multi-band RF & Optical downlink budget (`S_BAND`, `X_BAND`, `KA_BAND`, `OPTICAL`) with FSPL, atmospheric/rain fade, Shannon throughput, and pass data volume integration.
+- **Orbital Eclipse, Beta Angle & Solar/Battery Power Budget (`aegis_leo/physics/eclipse_power.py`)**:
+  - Astronomical Sun vector, orbital Beta angle ($\beta$), and J2 Sun-Synchronous Orbit (SSO) inclination solver.
+  - Dual-cone Earth shadow model (Umbra, Penumbra, Sunlit) with solar array power, battery Depth-of-Discharge (DoD %), and thermal swing estimation.
+- **End-to-End Integrated Autonomous Mission Pipeline (`aegis_leo/simulation/mission_pipeline.py`)**:
+  - Single unified pipeline orchestrating space weather, multi-model thermosphere, eclipse/power, ground comms, Foster B-plane + A-DRI risk, Edge-AI avoidance, 9-agent swarm consensus, and NASA/FCC compliance.
+- **Full FastAPI Backend REST Coverage (`backend/main.py`)**:
+  - Added `/api/comms/pass-schedule`, `/api/physics/eclipse-power`, `/api/mission/end-to-end`.
+  - Exposed Wave 2 subsystems via REST: `/api/risk/foster-bplane`, `/api/compliance/odar-report`, `/api/navigation/ekf-od`, `/api/navigation/iod-gauss`, `/api/sensors/radar-detect`, `/api/ai/mpc-avoidance`, `/api/ai/vleo-drag-makeup`, `/api/ai/federated-swarm`.
+- **Streamlit Mission Control Tab 13 (`app.py`)** & **CLI Subcommands (`aegis passes`, `aegis eclipse`, `aegis odar`, `aegis mission`)**.
+
 ## [1.4.0] - 2026-11-14
 
 ### Added

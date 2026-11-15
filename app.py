@@ -63,6 +63,9 @@ from aegis_leo.compliance.nasa_std_8719 import NASAComplianceAuditor
 from aegis_leo.compliance.odar_generator import generate_odar_report
 from aegis_leo.agents.swarm_orchestrator import OrbitalSwarmOrchestrator
 from aegis_leo.agents.swarm_telemetry_bus import SwarmTelemetryBus
+from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
+from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
+from aegis_leo.simulation.mission_pipeline import MissionPipelineConfig, run_end_to_end_mission
 
 # ------------------ Streamlit Sayfa Yapılandırması ------------------ #
 st.set_page_config(
@@ -235,7 +238,7 @@ with hud_c4:
 # ------------------ 12 Kapsamlı Görev Sekmesi ------------------ #
 (
     t_sim, t_swarm, t_fleet, t_mpc, t_radar, t_iod,
-    t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos
+    t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos, t_ops
 ) = st.tabs([
     "🌍 1. 3D Yörünge & Kaçınma",
     "🤖 2. 9-Ajanlı Sürü Zekası",
@@ -249,6 +252,7 @@ with hud_c4:
     "🎯 10. Point Nemo Düşüş Elipsi",
     "📑 11. CCSDS CDM & NASA ODAR",
     "🔬 12. Atmosfer Fiziği & Radyasyon",
+    "🛰️ 13. Yer İstasyonu, Tutulma & Tam Görev",
 ])
 
 # ==========================================
@@ -807,3 +811,92 @@ with t_atmos:
             <small style="color:#94a3b8;">SEU Bit-Flip Maskeleme: <b>{'BAŞARILI' if tmr_out['fault_masked_successfully'] else 'BAŞARISIZ'}</b></small>
         </div>
         """, unsafe_allow_html=True)
+
+# ==========================================
+# SEKME 13: YER İSTASYONU, TUTULMA & TAM GÖREV
+# ==========================================
+with t_ops:
+    st.subheader("🛰️ Yer İstasyonu Geçiş Planlayıcı, Tutulma/Güç Bütçesi & Uçtan Uca Görev Hattı")
+    st.caption("AOS/LOS geçiş pencereleri, RF/Optik bağlantı marjı, Beta açısı, gölge konisi pil DoD analizi ve tüm alt sistemleri birleştiren otonom görev hattı.")
+
+    ops_c1, ops_c2 = st.columns([1, 1])
+    with ops_c1:
+        st.markdown("#### 📡 Yer İstasyonu Geçiş & Bağlantı Bütçesi")
+        band_sel = st.selectbox("Haberleşme Bandı:", ["S_BAND", "X_BAND", "KA_BAND", "OPTICAL"], index=1)
+        pass_hours = st.slider("Geçiş Tarama Süresi (Saat):", 2.0, 24.0, 12.0, step=2.0)
+        sched = schedule_ground_passes(
+            altitude_km=float(satellite["altitude_km"]),
+            inclination_deg=float(satellite["inclination_deg"]),
+            duration_hours=pass_hours,
+            band=LinkBand(band_sel),
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Toplam İndirilen Veri ({sched.band})</div>
+            <div class="hud-val-cyan">{sched.total_data_downlinked_mb:,.1f} MB</div>
+            <small style="color:#94a3b8;">Geçiş Sayısı: <b>{sched.total_passes}</b> | Temas: <b>{sched.total_contact_time_s/60.0:.1f} dk</b> | En Verimli: <b>{sched.best_station or '-'}</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+        if sched.passes:
+            st.dataframe([p.to_dict() for p in sched.passes[:8]], use_container_width=True)
+
+    with ops_c2:
+        st.markdown("#### ☀️ Yörünge Tutulma, Beta Açısı & Pil DoD Döngüsü")
+        doy = st.slider("Yılın Günü (Day of Year):", 1, 365, 172)
+        bus_w = st.slider("Uydu Yük Gücü (W):", 50.0, 400.0, 160.0, step=10.0)
+        ecl = simulate_eclipse_and_power(
+            altitude_km=float(satellite["altitude_km"]),
+            inclination_deg=float(satellite["inclination_deg"]),
+            day_of_year=doy,
+            bus_load_w=bus_w,
+        )
+        st.markdown(f"""
+        <div class="hud-card">
+            <div class="hud-header">Yörünge Enerji Dengesi & Maks. DoD</div>
+            <div class="{'hud-val-emerald' if ecl.power_margin_positive else 'hud-val-rose'}">{ecl.net_orbit_energy_wh:+.1f} Wh</div>
+            <small style="color:#94a3b8;">Beta Açısı: <b>{ecl.beta_angle_deg:.1f}°</b> | Tutulma: <b>%{ecl.eclipse_fraction*100:.1f}</b> | Maks DoD: <b>%{ecl.max_dod_pct:.1f}</b> | SSO Eğim: <b>{ecl.sso_required_inclination_deg:.2f}°</b></small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig_ecl = go.Figure()
+        fig_ecl.add_trace(go.Scatter(
+            x=[s.orbit_angle_deg for s in ecl.timeline],
+            y=[s.solar_power_w for s in ecl.timeline],
+            mode="lines",
+            line=dict(color="#fbbf24", width=2),
+            name="Güneş Paneli Gücü (W)",
+        ))
+        fig_ecl.add_trace(go.Scatter(
+            x=[s.orbit_angle_deg for s in ecl.timeline],
+            y=[s.battery_soc_pct for s in ecl.timeline],
+            mode="lines",
+            line=dict(color="#34d399", width=2),
+            yaxis="y2",
+            name="Batarya SoC (%)",
+        ))
+        fig_ecl.update_layout(
+            title="Tek Yörünge Güç Üretimi & Batarya Şarj Döngüsü",
+            xaxis_title="Yörünge Faz Açısı (°)",
+            yaxis_title="Güç (W)",
+            yaxis2=dict(title="SoC (%)", overlaying="y", side="right", range=[0, 105]),
+            template="plotly_dark",
+            height=300,
+        )
+        st.plotly_chart(fig_ecl, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("#### 🚀 Uçtan Uca Otonom Görev Doğrulama Hattı (End-to-End Pipeline)")
+    if st.button("🛡️ Tam Entegre Otonom Görev Hattını Çalıştır", type="primary", use_container_width=True):
+        pipe_res = run_end_to_end_mission(MissionPipelineConfig(
+            satellite_id=satellite["id"],
+            storm_preset="g4_severe" if kp_val >= 6.0 else "quiet",
+            miss_distance_km=miss_dist,
+            link_band=band_sel,
+            day_of_year=doy,
+            bus_load_w=bus_w,
+        ))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Görev Hazırlık Puanı", f"{pipe_res.mission_readiness_score}/100", pipe_res.overall_status)
+        m2.metric("Foster B-Plane Pc", f"{pipe_res.conjunction_risk['foster_pc']:.2e}", f"A-DRI: {pipe_res.conjunction_risk['a_dri']:.3f}")
+        m3.metric("Sürü BFT Konsensüsü", pipe_res.swarm_consensus["status"], f"Onay: %{pipe_res.swarm_consensus['weighted_approval']*100:.1f}")
+        m4.metric("FCC 5-Yıl & NASA Uyum", "UYUMLU" if pipe_res.compliance["nasa_std_8719_compliant"] else "DENETİM", f"Ömür: {pipe_res.compliance['estimated_lifetime_years']:.1f} Yıl")

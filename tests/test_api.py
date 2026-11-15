@@ -164,3 +164,80 @@ def test_swarm_bft_consensus_api_endpoint():
     assert data["quorum_percentage"] >= 70.0
 
 
+def test_pass_schedule_api_endpoint():
+    resp = client.post("/api/comms/pass-schedule", json={
+        "altitude_km": 550.0,
+        "inclination_deg": 53.0,
+        "duration_hours": 6.0,
+        "band": "X_BAND",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_passes"] > 0
+    assert data["total_data_downlinked_mb"] > 0
+
+
+def test_eclipse_power_api_endpoint():
+    resp = client.post("/api/physics/eclipse-power", json={
+        "altitude_km": 550.0,
+        "inclination_deg": 97.6,
+        "day_of_year": 172,
+        "bus_load_w": 160.0,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["power_margin_positive"] is True
+    assert len(data["timeline"]) == 120
+
+
+def test_end_to_end_mission_api_endpoint():
+    sats = client.get("/api/catalog/satellites").json()
+    sat_id = sats[0]["id"]
+    resp = client.post("/api/mission/end-to-end", json={
+        "satellite_id": sat_id,
+        "storm_preset": "g4_severe",
+        "miss_distance_km": 0.85,
+        "link_band": "X_BAND",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert 0.0 <= data["mission_readiness_score"] <= 100.0
+    assert "swarm_consensus" in data
+    assert "compliance" in data
+
+
+def test_wave2_rest_endpoints():
+    r_bplane = client.post("/api/risk/foster-bplane", json={"altitude_km": 550.0, "miss_distance_km": 0.35})
+    assert r_bplane.status_code == 200
+    assert r_bplane.json()["pc_foster"] >= 0.0
+
+    r_radar = client.post("/api/sensors/radar-detect?range_km=15.0&rcs_m2=0.5")
+    assert r_radar.status_code == 200
+    assert r_radar.json()["detection_probability_pd"] >= 0.0
+
+    r_mpc = client.post("/api/ai/mpc-avoidance?ellipsoid_radius_km=0.5")
+    assert r_mpc.status_code == 200
+    assert r_mpc.json()["total_delta_v_m_s"] >= 0.0
+
+    r_iod = client.post("/api/navigation/iod-gauss?altitude_km=550.0&inclination_deg=53.0")
+    assert r_iod.status_code == 200
+    assert "orbital_elements" in r_iod.json()
+
+    r_ekf = client.post("/api/navigation/ekf-od?altitude_km=550.0&kp=5.0")
+    assert r_ekf.status_code == 200
+
+    r_vleo = client.post("/api/ai/vleo-drag-makeup?altitude_km=220.0")
+    assert r_vleo.status_code == 200
+    assert "l1_altitude_error_rms_m" in r_vleo.json()
+
+    r_fed = client.post("/api/ai/federated-swarm?num_satellites=6&rounds=2")
+    assert r_fed.status_code == 200
+    assert "fedprox_final_loss" in r_fed.json()
+
+    sats = client.get("/api/catalog/satellites").json()
+    r_odar = client.post(f"/api/compliance/odar-report?satellite_id={sats[0]['id']}")
+    assert r_odar.status_code == 200
+    assert "ORBITAL DEBRIS ASSESSMENT REPORT" in r_odar.json()["odar_markdown"].upper()
+
+
+

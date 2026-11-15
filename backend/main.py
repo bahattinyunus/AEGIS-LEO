@@ -49,6 +49,17 @@ from aegis_leo.physics.orbit_lifetime import simulate_orbit_decay, evaluate_deor
 from aegis_leo.adr.electrodynamic_tether import simulate_electrodynamic_tether_decay, compare_all_deorbit_methods
 from aegis_leo.adr.laser_ablation import simulate_laser_debris_engagement, LaserStationSpecs, DebrisTargetSpecs, LaserPlatformType
 from aegis_leo.agents.swarm_consensus import SwarmConsensusCoordinator
+from aegis_leo.physics.pass_scheduler import LinkBand, schedule_ground_passes
+from aegis_leo.physics.eclipse_power import simulate_eclipse_and_power
+from aegis_leo.simulation.mission_pipeline import MissionPipelineConfig, run_end_to_end_mission
+from aegis_leo.risk.foster_bplane import compute_bplane_conjunction_risk
+from aegis_leo.compliance.odar_generator import generate_odar_report
+from aegis_leo.navigation.sensor_fusion import AODSensorFusionEngine
+from aegis_leo.navigation.iod_gauss import generate_synthetic_optical_observations, initial_orbit_determination
+from aegis_leo.sensors.laser_radar import SpaceborneRadar
+from aegis_leo.ai.mpc_avoidance import SCPAvoidancePlanner, AvoidanceEllipsoid
+from aegis_leo.ai.drag_makeup import compare_admu_controllers
+from aegis_leo.ai.federated_swarm import compare_fedavg_vs_fedprox
 
 
 app = FastAPI(
@@ -637,6 +648,208 @@ def execute_swarm_bft_consensus(req: SwarmConsensusRequest):
     )
     return decision.to_dict()
 
+
+# --- Ground Station Pass Scheduling & RF/Optical Link Budget ---
+
+
+class PassScheduleRequest(BaseModel):
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    inclination_deg: float = Field(default=53.0, ge=0.0, le=180.0)
+    raan_deg: float = Field(default=15.0, ge=0.0, le=360.0)
+    duration_hours: float = Field(default=12.0, ge=0.5, le=72.0)
+    min_elevation_deg: float = Field(default=5.0, ge=0.0, le=45.0)
+    band: str = Field(default="X_BAND")
+    rain_rate_mm_hr: float = Field(default=0.0, ge=0.0, le=100.0)
+
+
+@app.post("/api/comms/pass-schedule", summary="Ground station AOS/LOS pass schedule and RF/Optical link budget")
+def get_ground_pass_schedule(req: PassScheduleRequest):
+    try:
+        band_enum = LinkBand(req.band.upper())
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unsupported link band '{req.band}'. Use S_BAND, X_BAND, KA_BAND, or OPTICAL.")
+    res = schedule_ground_passes(
+        altitude_km=req.altitude_km,
+        inclination_deg=req.inclination_deg,
+        raan_deg=req.raan_deg,
+        duration_hours=req.duration_hours,
+        min_elevation_deg=req.min_elevation_deg,
+        band=band_enum,
+        rain_rate_mm_hr=req.rain_rate_mm_hr,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+# --- Orbital Eclipse, Beta Angle & Solar/Battery Power Budget ---
+
+
+class EclipsePowerRequest(BaseModel):
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    inclination_deg: float = Field(default=97.6, ge=0.0, le=180.0)
+    raan_deg: float = Field(default=15.0, ge=0.0, le=360.0)
+    day_of_year: int = Field(default=172, ge=1, le=366)
+    solar_array_area_m2: float = Field(default=2.4, gt=0.1, le=50.0)
+    bus_load_w: float = Field(default=180.0, gt=1.0, le=10000.0)
+    battery_capacity_wh: float = Field(default=420.0, gt=10.0, le=50000.0)
+
+
+@app.post("/api/physics/eclipse-power", summary="Orbital beta angle, dual-cone eclipse & solar/battery power budget")
+def evaluate_eclipse_power(req: EclipsePowerRequest):
+    res = simulate_eclipse_and_power(
+        altitude_km=req.altitude_km,
+        inclination_deg=req.inclination_deg,
+        raan_deg=req.raan_deg,
+        day_of_year=req.day_of_year,
+        solar_array_area_m2=req.solar_array_area_m2,
+        bus_load_w=req.bus_load_w,
+        battery_capacity_wh=req.battery_capacity_wh,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+# --- End-to-End Integrated Autonomous Mission Pipeline ---
+
+
+class EndToEndMissionRequest(BaseModel):
+    satellite_id: str = "SAT-01"
+    storm_preset: str = "g4_severe"
+    miss_distance_km: float = Field(default=0.85, gt=0.01, le=50.0)
+    link_band: str = "X_BAND"
+    pass_duration_hours: float = Field(default=6.0, ge=1.0, le=24.0)
+    day_of_year: int = Field(default=172, ge=1, le=366)
+
+
+@app.post("/api/mission/end-to-end", summary="Run full integrated autonomous LEO safety & operations pipeline")
+def execute_end_to_end_mission(req: EndToEndMissionRequest):
+    try:
+        cfg = MissionPipelineConfig(
+            satellite_id=req.satellite_id,
+            storm_preset=req.storm_preset,
+            miss_distance_km=req.miss_distance_km,
+            link_band=req.link_band,
+            pass_duration_hours=req.pass_duration_hours,
+            day_of_year=req.day_of_year,
+        )
+        report = run_end_to_end_mission(cfg)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return _sanitize_for_json(report.to_dict())
+
+
+# --- Wave 2 Advanced Subsystems REST Exposure ---
+
+
+class FosterBPlaneRequest(BaseModel):
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    miss_distance_km: float = Field(default=0.35, gt=0.001, le=20.0)
+    hard_body_radius_m: float = Field(default=15.0, gt=0.5, le=200.0)
+
+
+@app.post("/api/risk/foster-bplane", summary="Foster (1992) & Chan (1997) 2D B-plane collision probability")
+def evaluate_foster_bplane(req: FosterBPlaneRequest):
+    r_km = EARTH_RADIUS_KM + req.altitude_km
+    v_circ = float(np.sqrt(398600.4418 / r_km))
+    r1 = np.array([r_km, 0.0, 0.0])
+    v1 = np.array([0.0, v_circ, 0.0])
+    r2 = np.array([r_km + req.miss_distance_km * 0.6, req.miss_distance_km * 0.8, 0.0])
+    v2 = np.array([0.0, -v_circ * 0.95, 0.25 * v_circ])
+    cov1 = np.diag([0.04, 0.25, 0.04])
+    cov2 = np.diag([0.09, 0.36, 0.09])
+    res = compute_bplane_conjunction_risk(
+        r1_eci=r1, v1_eci=v1, cov1_eci_km2=cov1,
+        r2_eci=r2, v2_eci=v2, cov2_eci_km2=cov2,
+        hard_body_radius_m=req.hard_body_radius_m,
+    )
+    return _sanitize_for_json(res.to_dict())
+
+
+@app.post("/api/compliance/odar-report", summary="Generate NASA-STD-8719.14B Orbital Debris Assessment Report (ODAR)")
+def generate_odar(satellite_id: str = Query("SAT-01"), collision_pc: float = Query(1e-5, ge=0.0, le=1.0)):
+    sat = get_satellite_by_id(satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+    report_md = generate_odar_report(satellite=sat, collision_pc=collision_pc)
+    return {"satellite_id": satellite_id, "satellite_name": sat["name"], "odar_markdown": report_md}
+
+
+@app.post("/api/navigation/ekf-od", summary="Autonomous Orbit Determination (AOD) via Joseph-Stabilized EKF")
+def run_ekf_navigation(altitude_km: float = Query(550.0, ge=200.0, le=1200.0), kp: float = Query(5.0, ge=0.0, le=9.0)):
+    r_sat = EARTH_RADIUS_KM + altitude_km
+    v_circ = float(np.sqrt(398600.4418 / r_sat))
+    eng = AODSensorFusionEngine(initial_state=np.array([r_sat, 0.0, 0.0, 0.0, v_circ, 0.0]))
+    perf = eng.run_simulation_epoch(dt_s=60.0, kp=kp)
+    return _sanitize_for_json(perf)
+
+
+@app.post("/api/navigation/iod-gauss", summary="Angles-only Initial Orbit Determination (Gauss iterative)")
+def run_iod_gauss(altitude_km: float = Query(550.0, ge=250.0, le=1500.0), inclination_deg: float = Query(53.0, ge=0.0, le=180.0)):
+    obs = generate_synthetic_optical_observations(
+        altitude_km=altitude_km,
+        inclination_deg=inclination_deg,
+        tracking_interval_s=120.0,
+        noise_arcsec=1.5,
+    )
+    res = initial_orbit_determination(observations=obs, method="gauss_iterative")
+    return _sanitize_for_json({
+        "method": res.method,
+        "residual_rms_arcsec": float(res.residual_rms_arcsec),
+        "orbital_elements": res.orbital_elements,
+    })
+
+
+@app.post("/api/sensors/radar-detect", summary="Spaceborne X-band Radar SNR & Swerling Pd detection")
+def run_radar_detection(
+    range_km: float = Query(15.0, ge=0.5, le=200.0),
+    rcs_m2: float = Query(0.5, gt=0.001, le=100.0),
+    swerling_model: str = Query("SWERLING_1"),
+):
+    radar = SpaceborneRadar(pt_watts=500.0, freq_hz=9.6e9, antenna_gain_dbi=36.0)
+    snr_db = radar.compute_snr_db(range_km=range_km, rcs_m2=rcs_m2)
+    pd_val = radar.calculate_pd(snr_linear=10.0 ** (snr_db / 10.0), pfa=1e-6, model=swerling_model)
+    return _sanitize_for_json({
+        "range_km": range_km,
+        "rcs_m2": rcs_m2,
+        "swerling_model": swerling_model,
+        "snr_db": round(float(snr_db), 2),
+        "detection_probability_pd": round(float(pd_val), 4),
+        "pfa": 1e-6,
+    })
+
+
+@app.post("/api/ai/mpc-avoidance", summary="Sequential Convex Programming (SCP) / MPC collision avoidance trajectory")
+def run_mpc_avoidance(ellipsoid_radius_km: float = Query(0.5, gt=0.05, le=5.0)):
+    planner = SCPAvoidancePlanner(horizon_steps=20, time_step_s=180.0, max_thrust_accel=0.05)
+    ellipsoid = AvoidanceEllipsoid(
+        center_rel_km=np.array([0.0, 0.45, 0.0]),
+        semi_axes_km=np.array([ellipsoid_radius_km, ellipsoid_radius_km * 2.0, ellipsoid_radius_km]),
+    )
+    res = planner.plan_avoidance(
+        initial_state=np.array([0.0, -2.0, 0.0, 0.0, 0.005, 0.0]),
+        obstacles=[ellipsoid],
+    )
+    return _sanitize_for_json({
+        "total_delta_v_m_s": round(float(res.total_delta_v_m_s), 4),
+        "iterations": int(res.iterations),
+        "min_obstacle_distance_km": round(float(res.min_obstacle_distance_km), 4),
+        "converged": bool(res.converged),
+    })
+
+
+@app.post("/api/ai/vleo-drag-makeup", summary="VLEO L1 Adaptive vs PID Drag Make-Up controller benchmark")
+def run_vleo_admu(altitude_km: float = Query(220.0, ge=180.0, le=300.0)):
+    res = compare_admu_controllers(altitude_km=altitude_km, duration_s=600.0)
+    return _sanitize_for_json({
+        "altitude_km": altitude_km,
+        "l1_altitude_error_rms_m": res["l1_altitude_error_rms_m"],
+        "pid_altitude_error_rms_m": res["pid_altitude_error_rms_m"],
+        "l1_vs_pid_improvement_pct": res["l1_vs_pid_improvement_pct"],
+    })
+
+
+@app.post("/api/ai/federated-swarm", summary="ISL Federated Learning (FedAvg vs FedProx) across constellation")
+def run_federated_swarm(num_satellites: int = Query(8, ge=4, le=24), rounds: int = Query(3, ge=1, le=10)):
+    res = compare_fedavg_vs_fedprox(num_satellites=num_satellites, rounds=rounds)
+    return _sanitize_for_json(res)
 
 
 # --- Interactive 3D Web HUD Dashboard ---
