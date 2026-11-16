@@ -67,6 +67,10 @@ from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 from aegis_leo.physics.radiation_environment import analyze_radiation_environment, compute_saa_flux_map
 from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
 from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
+from aegis_leo.analytics.mission_analytics import MissionAnalyticsEngine, analyze_mission_health
+from aegis_leo.analytics.debris_tracker import TrackedObject, build_debris_risk_matrix
+from aegis_leo.physics.space_weather_forecast import run_space_weather_forecast
+from aegis_leo.ai.anomaly_detector import TelemetryAnomalyDetector, detect_telemetry_anomalies
 from aegis_leo import __version__
 
 
@@ -1023,6 +1027,225 @@ def run_tca_screening(req: TCAScreeningRequest):
     if not res.events:
         data["min_miss_distance_km"] = None
     return data
+
+
+# --- Wave 5 (v2.2.0): Mission Analytics, Debris Tracker, Space Weather Forecast & Anomaly Detector ---
+
+
+class MissionAnalyticsRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    initial_fuel_kg: float = Field(default=20.0, gt=0.0, le=10000.0)
+    telemetry: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "satellite_name": "STARLINK_LEO",
+            "altitude_km": 550.0,
+            "mass_kg": 260.0,
+            "fuel_remaining_kg": 15.4,
+            "isp_s": 250.0,
+            "kp": 1.5,
+            "f10_7": 70.0,
+            "adri_score": 0.18,
+            "collision_pc": 1e-7,
+            "power_margin_positive": True,
+            "dod_pct": 42.0,
+            "beta_deg": 20.0,
+            "all_thermal_ok": True,
+            "peak_aero_w": 0.8,
+            "total_passes": 7,
+            "total_data_mb": 320.0,
+            "tid_krad_yr": 1.2,
+            "seu_per_day": 0.05,
+            "scrub_s": 300.0,
+            "pqc_authentic": True,
+            "pqc_replay_ok": True,
+            "pqc_tamper_ok": True,
+        }
+    )
+
+
+@app.post("/api/analytics/mission-health", summary="Comprehensive mission health KPI analysis across all subsystems")
+def evaluate_mission_health(req: MissionAnalyticsRequest):
+    """
+    Ingests a telemetry snapshot and returns a full per-subsystem health
+    scoring with anomaly flags, trend direction, fuel/radiation life
+    projections, and an overall KPI summary.
+    """
+    snapshot = analyze_mission_health(
+        satellite_id=req.satellite_id,
+        telemetry=req.telemetry,
+        initial_fuel_kg=req.initial_fuel_kg,
+    )
+    return _sanitize_for_json(snapshot.to_dict())
+
+
+class DebrisRiskMatrixRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    inclination_deg: float = Field(default=53.0, ge=0.0, le=180.0)
+    num_debris: int = Field(default=80, ge=10, le=300)
+    horizon_hours: float = Field(default=6.0, ge=0.5, le=24.0)
+    detect_secondary_chains: bool = True
+
+
+@app.post("/api/analytics/debris-risk-matrix", summary="Multi-object fleet debris tracking and conjunction risk matrix")
+def compute_debris_risk_matrix(req: DebrisRiskMatrixRequest):
+    """
+    Builds a synthetic LEO debris catalogue around the primary satellite,
+    screens all pairs for close approaches, detects secondary conjunction
+    chains triggered by evasive manoeuvres, and returns a prioritised
+    risk matrix.
+    """
+    matrix = build_debris_risk_matrix(
+        satellite_id=req.satellite_id,
+        altitude_km=req.altitude_km,
+        inclination_deg=req.inclination_deg,
+        num_debris=req.num_debris,
+        horizon_hours=req.horizon_hours,
+    )
+    return _sanitize_for_json(matrix.to_dict())
+
+
+class SpaceWeatherForecastRequest(BaseModel):
+    current_kp: float = Field(default=1.5, ge=0.0, le=9.0)
+    current_f10_7: float = Field(default=70.0, ge=50.0, le=450.0)
+    horizon_hours: int = Field(default=48, ge=1, le=72)
+    cme_speed_km_s: float = Field(default=0.0, ge=0.0, le=3000.0,
+                                   description="Detected CME plane-of-sky speed (km/s). Set 0 if none active.")
+    orbit_altitude_km: float = Field(default=550.0, ge=160.0, le=2000.0)
+    kp_history: Optional[List[float]] = Field(default=None,
+                                               description="Last N hours of observed Kp (oldest→newest).")
+
+
+@app.post("/api/space-weather/forecast", summary="24–72 h probabilistic Kp/F10.7 forecast with CME transit model")
+def get_space_weather_forecast(req: SpaceWeatherForecastRequest):
+    """
+    Generates a probabilistic ensemble space weather forecast using an
+    AR(4) Kp predictor, F10.7 AR(2) model, and optional CME transit
+    model (Wang et al. 2004). Returns hourly Kp/density traces, storm
+    onset probability, expected along-track drift accumulation, and
+    early-warning alerts.
+    """
+    forecast = run_space_weather_forecast(
+        current_kp=req.current_kp,
+        current_f10_7=req.current_f10_7,
+        horizon_hours=req.horizon_hours,
+        cme_speed_km_s=req.cme_speed_km_s,
+        orbit_altitude_km=req.orbit_altitude_km,
+        kp_history=req.kp_history,
+    )
+    return _sanitize_for_json(forecast.to_dict())
+
+
+class TelemetryFrameModel(BaseModel):
+    altitude_km: float = 550.0
+    velocity_km_s: float = 7.61
+    fuel_kg: float = 15.4
+    battery_soc_pct: float = 80.0
+    solar_power_w: float = 400.0
+    bus_load_w: float = 180.0
+    temp_avionics_c: float = 25.0
+    temp_battery_c: float = 15.0
+    kp_index: float = 1.5
+    pinn_density_output: float = 2.4e-13
+    eclipse_flag: bool = False
+    isp_s: float = 250.0
+    delta_v_m_s: float = 0.0
+    fuel_kg_before_burn: float = 15.4
+    mass_kg: float = 260.0
+
+
+class AnomalyDetectionRequest(BaseModel):
+    satellite_id: str = "STARLINK_LEO"
+    frames: List[TelemetryFrameModel] = Field(
+        default_factory=lambda: [TelemetryFrameModel().model_dump()],
+        description="Ordered list of telemetry frames (oldest first). Min 1, max 100.",
+        min_length=1,
+        max_length=100,
+    )
+    z_threshold: float = Field(default=3.5, ge=1.0, le=6.0)
+
+
+@app.post("/api/analytics/detect-anomalies", summary="Real-time statistical & physics-guided telemetry anomaly detection")
+def run_anomaly_detection(req: AnomalyDetectionRequest):
+    """
+    Processes a batch of sequential telemetry frames through a multi-layer
+    anomaly detector:
+      • Per-channel Z-score outlier flagging
+      • CUSUM change-point detection
+      • Multivariate Mahalanobis distance anomaly
+      • Physics consistency checks (vis-viva, power balance, thermal, Tsiolkovsky)
+      • SEU bit-flip signature detection in PINN output stream
+
+    Returns anomaly reports for every frame with severity classification.
+    """
+    frames_dicts = [f.model_dump() for f in req.frames]
+    reports = detect_telemetry_anomalies(
+        satellite_id=req.satellite_id,
+        frames=frames_dicts,
+        z_threshold=req.z_threshold,
+    )
+    return _sanitize_for_json({
+        "satellite_id": req.satellite_id,
+        "frames_processed": len(reports),
+        "total_anomalies": sum(r.anomaly_count for r in reports),
+        "critical_anomalies": sum(r.critical_count for r in reports),
+        "reports": [r.to_dict() for r in reports],
+    })
+
+
+@app.get("/api/analytics/subsystem-trends", summary="Per-subsystem health trends across rolling mission epochs")
+def get_subsystem_trends(
+    satellite_id: str = Query("STARLINK_LEO"),
+    num_epochs: int = Query(10, ge=3, le=30),
+):
+    """
+    Generates synthetic rolling health snapshots to demonstrate the
+    per-subsystem trend analysis engine.  In a real deployment, the engine
+    accumulates live telemetry; here it demonstrates output format and
+    trend computation.
+    """
+    rng = np.random.default_rng(42)
+    engine = MissionAnalyticsEngine(satellite_id=satellite_id, initial_fuel_kg=20.0)
+    for i in range(num_epochs):
+        engine.ingest_snapshot({
+            "satellite_name": satellite_id,
+            "altitude_km": 550.0 + rng.normal(0, 0.5),
+            "mass_kg": 260.0,
+            "fuel_remaining_kg": max(0.5, 15.0 - i * 0.3),
+            "isp_s": 250.0,
+            "kp": float(np.clip(1.5 + rng.normal(0, 0.8), 0, 9)),
+            "f10_7": float(np.clip(75.0 + rng.normal(0, 10), 65, 350)),
+            "adri_score": float(np.clip(0.15 + i * 0.01 + rng.normal(0, 0.03), 0, 1)),
+            "collision_pc": float(10 ** rng.uniform(-8, -5)),
+            "power_margin_positive": bool(rng.uniform() > 0.05),
+            "dod_pct": float(np.clip(40 + i * 1.5 + rng.normal(0, 3), 0, 100)),
+            "beta_deg": 20.0,
+            "all_thermal_ok": bool(rng.uniform() > 0.03),
+            "peak_aero_w": float(np.clip(0.5 + rng.normal(0, 0.2), 0, 20)),
+            "total_passes": int(np.clip(7 + rng.integers(-2, 3), 0, 15)),
+            "total_data_mb": float(np.clip(300 + rng.normal(0, 50), 50, 1000)),
+            "tid_krad_yr": float(np.clip(1.2 + i * 0.05 + rng.normal(0, 0.1), 0, 50)),
+            "seu_per_day": float(np.clip(0.05 + rng.normal(0, 0.02), 0, 20)),
+            "scrub_s": 300.0,
+            "pqc_authentic": True,
+            "pqc_replay_ok": True,
+            "pqc_tamper_ok": True,
+            "mission_elapsed_years": (i + 1) / 12.0,
+        })
+    trend_reports = engine.get_subsystem_trend_reports()
+    return _sanitize_for_json({
+        "satellite_id": satellite_id,
+        "epochs_analyzed": num_epochs,
+        "trends": [
+            {
+                "subsystem": r.subsystem,
+                "trend": r.trend,
+                "slope_per_epoch": r.slope_per_epoch,
+                "history": r.history,
+            }
+            for r in trend_reports
+        ],
+    })
 
 
 # --- Interactive 3D Web HUD Dashboard ---

@@ -73,6 +73,10 @@ from aegis_leo.security.pqc_telecommand import run_pqc_telecommand_audit
 from aegis_leo.physics.radiation_environment import analyze_radiation_environment, compute_saa_flux_map
 from aegis_leo.astrodynamics.orbit_transfer import plan_orbit_transfer
 from aegis_leo.risk.tca_finder import OrbitalElements, build_intercepting_secondary, screen_conjunctions
+from aegis_leo.analytics.mission_analytics import MissionAnalyticsEngine, analyze_mission_health
+from aegis_leo.analytics.debris_tracker import TrackedObject, build_debris_risk_matrix
+from aegis_leo.physics.space_weather_forecast import SpaceWeatherForecaster, run_space_weather_forecast
+from aegis_leo.ai.anomaly_detector import TelemetryAnomalyDetector
 
 # ------------------ Streamlit Sayfa Yapılandırması ------------------ #
 st.set_page_config(
@@ -246,7 +250,7 @@ with hud_c4:
 (
     t_sim, t_swarm, t_fleet, t_mpc, t_radar, t_iod,
     t_adr, t_vleo, t_fed, t_deorbit, t_cdm, t_atmos, t_ops,
-    t_adcs_thm, t_pqc_tour, t_rad_xfer
+    t_adcs_thm, t_pqc_tour, t_rad_xfer, t_analytics
 ) = st.tabs([
     "🌍 1. 3D Yörünge & Kaçınma",
     "🤖 2. 9-Ajanlı Sürü Zekası",
@@ -264,6 +268,7 @@ with hud_c4:
     "🧭 14. 6-DOF ADCS & Termal Kontrol",
     "🔐 15. Kuantum-Güvenli Telekomut & Çoklu-ADR Turu",
     "☢️ 16. Radyasyon/SAA, Transfer & TCA Tarama",
+    "📊 17. Görev Analitikleri & Anomali Tespiti",
 ])
 
 # ==========================================
@@ -1121,3 +1126,405 @@ with t_rad_xfer:
             st.dataframe(tca_res.events, use_container_width=True)
         except ValueError as exc:
             st.warning(f"Kavuşum senaryosu kurulamadı: {exc}")
+
+# ==========================================
+# SEKME 17: GÖREV ANALİTİKLERİ & ANOMALİ TESPİTİ (v2.2.0)
+# ==========================================
+with t_analytics:
+    st.subheader("📊 Kapsamlı Görev Analitikleri, Uzay Havası Tahmini & Telemetri Anomali Tespiti")
+    st.caption(
+        "Alt sistem sağlık skoru, yakıt/radyasyon ömür projeksiyonu, 24–72 saatlik CME tabanlı Kp tahmini "
+        "ve çok katmanlı telemetri anomali tespiti (Z-skor, CUSUM, Mahalanobis, fizik tutarlılık & SEU)."
+    )
+
+    an_tab1, an_tab2, an_tab3, an_tab4 = st.tabs([
+        "🏥 Görev Sağlık Panosu",
+        "🌦️ Uzay Havası Tahmini",
+        "☄️ Enkaz Filo Risk Matrisi",
+        "🔍 Telemetri Anomali Dedektörü",
+    ])
+
+    # ---- Alt-Sekme 1: Mission Health Dashboard ----
+    with an_tab1:
+        st.markdown("#### 🏥 Gerçek Zamanlı Alt Sistem Sağlık Skoru & KPI Özeti")
+
+        health_telemetry = {
+            "satellite_name": satellite["name"],
+            "altitude_km": float(satellite["altitude_km"]),
+            "mass_kg": float(satellite["mass_kg"]),
+            "fuel_remaining_kg": float(satellite["remaining_propellant_kg"]),
+            "isp_s": float(satellite["isp_seconds"]),
+            "kp": kp_val,
+            "f10_7": f107_val,
+            "adri_score": risk_eval["a_dri"],
+            "collision_pc": risk_eval["components"]["c_prob_raw"],
+            "power_margin_positive": True,
+            "dod_pct": 42.0,
+            "beta_deg": 20.0,
+            "all_thermal_ok": True,
+            "peak_aero_w": 1.2 if kp_val < 5.0 else 8.5,
+            "total_passes": 7,
+            "total_data_mb": 320.0,
+            "tid_krad_yr": 1.2 + kp_val * 0.1,
+            "seu_per_day": 0.05 + kp_val * 0.02,
+            "scrub_s": 300.0,
+            "pqc_authentic": True,
+            "pqc_replay_ok": True,
+            "pqc_tamper_ok": True,
+            "mission_elapsed_years": 1.5,
+            "component_tid_tolerance_krad": 30.0,
+        }
+
+        snapshot = analyze_mission_health(
+            satellite_id=selected_sat_key,
+            telemetry=health_telemetry,
+            initial_fuel_kg=float(satellite["remaining_propellant_kg"]) * 1.4,
+        )
+
+        # Overall health gauge
+        h_col1, h_col2, h_col3, h_col4 = st.columns(4)
+        overall = snapshot.overall_health_score
+        grade_color = "#34d399" if overall >= 70 else ("#fbbf24" if overall >= 50 else "#f43f5e")
+        with h_col1:
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Genel Görev Sağlığı</div>
+                <div style="font-size:2rem; font-weight:800; color:{grade_color}; font-family:monospace;">
+                    {overall:.1f} / 100
+                </div>
+                <small style="color:#94a3b8;">Derece: <b>{snapshot.overall_grade.value}</b> | Aşama: <b>{snapshot.mission_stage.value}</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+        with h_col2:
+            fp = snapshot.fuel_projection
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Yakıt Ömrü (Nominal)</div>
+                <div class="hud-val-cyan">{fp.days_remaining_nominal:.0f} Gün</div>
+                <small style="color:#94a3b8;">Yakıt: <b>{fp.current_propellant_kg:.1f} kg (%{fp.fuel_fraction_pct:.1f})</b> | Fırtına: <b>{fp.days_remaining_worst_case:.0f} gün</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+        with h_col3:
+            rp = snapshot.radiation_projection
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Radyasyon Ömrü</div>
+                <div class="hud-val-amber">{rp.years_to_tid_limit:.1f} Yıl</div>
+                <small style="color:#94a3b8;">TID: <b>{rp.tid_accumulated_krad:.2f} krad</b> | Kalan: <b>{rp.tid_budget_remaining_krad:.1f} krad</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+        with h_col4:
+            n_crit = snapshot.kpi_summary.get("critical_anomaly_count", 0)
+            n_warn = snapshot.kpi_summary.get("warning_anomaly_count", 0)
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Anomali Sayacı</div>
+                <div class="{'hud-val-rose' if n_crit > 0 else 'hud-val-emerald'}">{n_crit} KRİTİK</div>
+                <small style="color:#94a3b8;">Uyarı: <b>{n_warn}</b> | Toplam Anomali: <b>{n_crit + n_warn}</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("##### 🔬 Alt Sistem Bazlı Sağlık Skoru Radar Grafiği")
+
+        subsys_names = list(snapshot.subsystems.keys())
+        subsys_scores = [snapshot.subsystems[k].health_score for k in subsys_names]
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=subsys_scores + [subsys_scores[0]],
+            theta=subsys_names + [subsys_names[0]],
+            fill="toself",
+            fillcolor="rgba(56, 189, 248, 0.2)",
+            line=dict(color="#38bdf8", width=2),
+            name="Sağlık Skoru",
+        ))
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            template="plotly_dark",
+            height=400,
+            title="Alt Sistem Sağlık Skoru Radar (0–100)",
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+        # Anomaly list
+        if snapshot.anomalies:
+            st.markdown("##### ⚠️ Aktif Anomali & Uyarı Listesi")
+            for anom in snapshot.anomalies:
+                sev_color = "#ef4444" if anom.severity.value == "CRITICAL" else "#f59e0b"
+                st.markdown(
+                    f'<div style="border-left:4px solid {sev_color}; padding:8px 12px; margin:4px 0; '
+                    f'background:rgba(15,23,42,0.6); border-radius:6px; font-size:0.82rem;">'
+                    f'<b style="color:{sev_color};">[{anom.severity.value}] {anom.subsystem}</b> — {anom.description}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.success("✅ Aktif anomali bulunmuyor. Tüm alt sistemler nominal.")
+
+    # ---- Alt-Sekme 2: Space Weather Forecast ----
+    with an_tab2:
+        st.markdown("#### 🌦️ 24–72 Saatlik Olasılıksal Kp / Termosfer Yoğunluk Tahmini")
+        fc_col1, fc_col2 = st.columns([1, 2])
+        with fc_col1:
+            fc_horizon = st.slider("Tahmin Ufku (saat):", 12, 72, 48, step=12, key="fc_horizon")
+            cme_speed = st.slider("CME Tespit Hızı (km/s — 0 = pasif):", 0.0, 2500.0, 0.0, step=100.0, key="cme_speed")
+            if st.button("🌦️ Tahmin Üret", type="primary", use_container_width=True, key="btn_forecast"):
+                st.session_state["sw_forecast"] = run_space_weather_forecast(
+                    current_kp=kp_val,
+                    current_f10_7=f107_val,
+                    horizon_hours=fc_horizon,
+                    cme_speed_km_s=cme_speed,
+                    orbit_altitude_km=float(satellite["altitude_km"]),
+                )
+
+            if "sw_forecast" not in st.session_state:
+                st.session_state["sw_forecast"] = run_space_weather_forecast(
+                    current_kp=kp_val,
+                    current_f10_7=f107_val,
+                    horizon_hours=48,
+                    orbit_altitude_km=float(satellite["altitude_km"]),
+                )
+
+            fc = st.session_state["sw_forecast"]
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">24 Saatlik Fırtına İhtimali</div>
+                <div class="{'hud-val-rose' if fc.storm_probability_24h > 0.5 else 'hud-val-emerald'}">{fc.storm_probability_24h*100:.0f}%</div>
+                <small style="color:#94a3b8;">72 Saatlik: <b>%{fc.storm_probability_72h*100:.0f}</b> | Maks Kp: <b>{fc.max_kp_forecast:.1f}</b> @ T+<b>{fc.max_kp_hour}h</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Beklenen Boylamsal Sürüklenme</div>
+                <div class="hud-val-amber">{fc.total_drift_km_24h:.3f} km / 24h</div>
+                <small style="color:#94a3b8;">72 Saatlik Birikimli: <b>{fc.total_drift_km_72h:.2f} km</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if fc.alerts:
+                for alert in fc.alerts:
+                    st.warning(f"🚨 **{alert.alert_id}** — {alert.impact_description}")
+
+        with fc_col2:
+            fc = st.session_state["sw_forecast"]
+            hours = [h.hour_offset for h in fc.forecast_hours]
+            kp_p50 = [h.kp_p50 for h in fc.forecast_hours]
+            kp_p10 = [h.kp_p10 for h in fc.forecast_hours]
+            kp_p90 = [h.kp_p90 for h in fc.forecast_hours]
+            density_factors = [h.density_factor_p50 for h in fc.forecast_hours]
+
+            fig_fc = go.Figure()
+            fig_fc.add_trace(go.Scatter(x=hours, y=kp_p90, mode="lines", line=dict(color="#f43f5e", width=1, dash="dash"), name="Kp P90 (Kötümser)"))
+            fig_fc.add_trace(go.Scatter(x=hours, y=kp_p10, mode="lines", line=dict(color="#34d399", width=1, dash="dash"), fill="tonexty", fillcolor="rgba(56,189,248,0.1)", name="Kp P10 (İyimser)"))
+            fig_fc.add_trace(go.Scatter(x=hours, y=kp_p50, mode="lines", line=dict(color="#38bdf8", width=3), name="Kp Ortanca (P50)"))
+            fig_fc.add_hline(y=5.0, line_dash="dot", line_color="#f59e0b", annotation_text="G1 Fırtına Eşiği (Kp=5)")
+            fig_fc.add_hline(y=7.0, line_dash="dot", line_color="#ef4444", annotation_text="G3 Şiddetli Fırtına (Kp=7)")
+            fig_fc.update_layout(
+                title=f"{fc.horizon_hours}h Olasılıksal Kp Tahmini (Topluluk={fc.ensemble_size})",
+                xaxis_title="Şimdiden Saat (h)",
+                yaxis_title="Kp İndeksi",
+                yaxis=dict(range=[0, 9.5]),
+                template="plotly_dark",
+                height=360,
+            )
+            st.plotly_chart(fig_fc, use_container_width=True)
+
+            fig_df = go.Figure()
+            fig_df.add_trace(go.Scatter(x=hours, y=density_factors, mode="lines", fill="tozeroy",
+                                         line=dict(color="#f59e0b", width=2), fillcolor="rgba(245,158,11,0.15)", name="Yoğunluk Çarpanı (ρ/ρ_sakin)"))
+            fig_df.add_hline(y=1.0, line_dash="dash", line_color="#94a3b8", annotation_text="Sakin Referans")
+            fig_df.update_layout(title="Tahmin Edilen Termosfer Yoğunluk Çarpanı", xaxis_title="Şimdiden Saat (h)", yaxis_title="ρ / ρ_sakin", template="plotly_dark", height=260)
+            st.plotly_chart(fig_df, use_container_width=True)
+
+    # ---- Alt-Sekme 3: Debris Fleet Risk Matrix ----
+    with an_tab3:
+        st.markdown("#### ☄️ Çok Nesneli Enkaz Filo Risk Matrisi & İkincil Çarpışma Zinciri Tespiti")
+        drm_col1, drm_col2 = st.columns([1, 1])
+        with drm_col1:
+            drm_num = st.slider("Takip Edilen Enkaz Nesne Sayısı:", 20, 200, 80, step=10, key="drm_num")
+            drm_horizon = st.slider("Tarama Ufku (saat):", 1.0, 12.0, 6.0, step=1.0, key="drm_horizon")
+            if st.button("☄️ Risk Matrisini Hesapla", type="primary", use_container_width=True, key="btn_drm"):
+                st.session_state["drm_result"] = build_debris_risk_matrix(
+                    satellite_id=selected_sat_key,
+                    altitude_km=float(satellite["altitude_km"]),
+                    inclination_deg=float(satellite["inclination_deg"]),
+                    num_debris=drm_num,
+                    horizon_hours=drm_horizon,
+                )
+            if "drm_result" not in st.session_state:
+                st.session_state["drm_result"] = build_debris_risk_matrix(
+                    satellite_id=selected_sat_key,
+                    altitude_km=float(satellite["altitude_km"]),
+                    inclination_deg=float(satellite["inclination_deg"]),
+                    num_debris=50,
+                    horizon_hours=6.0,
+                )
+            drm = st.session_state["drm_result"]
+            drm_color = "#ef4444" if drm.critical_conjunctions > 0 else ("#f59e0b" if drm.warning_conjunctions > 0 else "#34d399")
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">Taranan Nesne / Kritik Yaklaşma</div>
+                <div style="font-size:1.8rem;font-weight:800;color:{drm_color};font-family:monospace;">
+                    {drm.total_tracked_objects} / {drm.critical_conjunctions}
+                </div>
+                <small style="color:#94a3b8;">En Yüksek Risk: <b>{drm.highest_risk_pairing}</b> (skor: {drm.highest_risk_score:.3f}) | Min Mesafe: <b>{drm.min_miss_distance_km:.3f} km</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+            if drm.secondary_chain_risk:
+                st.warning("⚡ **İkincil Çarpışma Zinciri Tespit Edildi!** Kaçınma manevrasının yeni kavuşum yaratma riski yüksek.")
+            st.info(f"Toplam {drm.total_conjunctions_screened} çift tarandı. {len(drm.conjunction_events)} olay bulundu.")
+
+        with drm_col2:
+            if drm.conjunction_events:
+                top5 = drm.top_threats(5)
+                rows = [
+                    {
+                        "Enkaz": ev.object_b_name[:20],
+                        "Miss (km)": ev.miss_distance_km,
+                        "V_rel (km/s)": ev.relative_speed_km_s,
+                        "Risk Skoru": ev.risk_score,
+                        "TCA+h": round(ev.tca_seconds_from_now / 3600, 2),
+                        "Kritik": "🔴" if ev.is_critical else "🟡",
+                        "Zincir": "⚡" if ev.is_secondary_chain else "—",
+                    }
+                    for ev in top5
+                ]
+                st.markdown("##### 🏆 En Yüksek Risk Toplulukları (Top-5)")
+                st.dataframe(rows, use_container_width=True)
+
+                fig_drm = go.Figure()
+                for ev in drm.conjunction_events[:30]:
+                    color = "#ef4444" if ev.is_critical else ("#f59e0b" if ev.risk_score > 0.3 else "#38bdf8")
+                    fig_drm.add_trace(go.Scatter(
+                        x=[ev.tca_seconds_from_now / 3600],
+                        y=[ev.miss_distance_km],
+                        mode="markers",
+                        marker=dict(size=max(6, ev.risk_score * 20), color=color, opacity=0.8),
+                        name=ev.object_b_name[:12],
+                        showlegend=False,
+                        text=f"{ev.object_b_name}<br>Risk:{ev.risk_score:.3f}<br>Miss:{ev.miss_distance_km:.3f}km",
+                        hoverinfo="text",
+                    ))
+                fig_drm.update_layout(
+                    title="TCA Zamanı vs. Yaklaşma Mesafesi (Balon Boyutu = Risk)",
+                    xaxis_title="TCA'ya Kalan (saat)",
+                    yaxis_title="Yaklaşma Mesafesi (km)",
+                    yaxis_type="log",
+                    template="plotly_dark",
+                    height=350,
+                )
+                st.plotly_chart(fig_drm, use_container_width=True)
+            else:
+                st.success("✅ Seçili ufukta hiç kritik yaklaşma tespit edilmedi.")
+
+    # ---- Alt-Sekme 4: Anomaly Detector ----
+    with an_tab4:
+        st.markdown("#### 🔍 Çok Katmanlı Telemetri Anomali Tespiti (Z-Skor, CUSUM, Mahalanobis, Fizik & SEU)")
+
+        anom_col1, anom_col2 = st.columns([1, 1])
+        with anom_col1:
+            st.markdown("##### ⚙️ Anomali Parametreleri & Sentetik Telemetri Üretimi")
+            n_frames = st.slider("Telemetri Çerçeve Sayısı:", 5, 50, 20, step=5, key="n_frames")
+            z_thr = st.slider("Z-Skor Eşiği (σ):", 2.0, 5.0, 3.5, step=0.5, key="z_thr")
+            inject_anomaly = st.checkbox("Sentetik Anomali Enjekte Et (SEU + Güç Dengesi Hatası)", value=True)
+
+            rng_ad = np.random.default_rng(99)
+            frames = []
+            base_vel = np.sqrt(398600.4418 / (6378.137 + float(satellite["altitude_km"])))
+            for i in range(n_frames):
+                # Inject deliberate anomaly at frame ~70% position
+                anomaly_frame = inject_anomaly and (i == int(n_frames * 0.7))
+                frames.append({
+                    "altitude_km": float(satellite["altitude_km"]) + rng_ad.normal(0, 0.1),
+                    "velocity_km_s": base_vel + rng_ad.normal(0, 0.002) + (0.4 if anomaly_frame else 0),
+                    "fuel_kg": max(0.1, float(satellite["remaining_propellant_kg"]) - i * 0.05),
+                    "battery_soc_pct": 80.0 + rng_ad.normal(0, 2),
+                    "solar_power_w": 400.0 if not (i % 6 < 2) else 0.0,  # eclipses
+                    "bus_load_w": 180.0 + rng_ad.normal(0, 5),
+                    "temp_avionics_c": 25.0 + kp_val * 2.0 + rng_ad.normal(0, 1),
+                    "temp_battery_c": 15.0 + rng_ad.normal(0, 1),
+                    "kp_index": kp_val + rng_ad.normal(0, 0.3),
+                    "pinn_density_output": float(2.4e-13 * (1 + rng_ad.normal(0, 0.1))) * (1e6 if anomaly_frame else 1),
+                    "eclipse_flag": bool(i % 6 < 2),
+                    "mass_kg": float(satellite["mass_kg"]),
+                    "isp_s": float(satellite["isp_seconds"]),
+                    "delta_v_m_s": 0.0,
+                    "fuel_kg_before_burn": max(0.1, float(satellite["remaining_propellant_kg"]) - i * 0.05 + 0.001),
+                })
+
+            detector = TelemetryAnomalyDetector(satellite_id=selected_sat_key, z_threshold=z_thr)
+            reports = [detector.ingest_frame(f) for f in frames]
+
+            total_crit = sum(r.critical_count for r in reports)
+            total_warn = sum(r.warning_count for r in reports)
+            st.markdown(f"""
+            <div class="hud-card">
+                <div class="hud-header">{n_frames} Çerçeve Anomali Özeti</div>
+                <div class="{'hud-val-rose' if total_crit > 0 else 'hud-val-emerald'}">{total_crit} KRİTİK  |  {total_warn} UYARI</div>
+                <small style="color:#94a3b8;">İşlenen Çerçeve: <b>{n_frames}</b> | Ortalama Sağlık: <b>{np.mean([r.overall_health_score for r in reports]):.1f}/100</b></small>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with anom_col2:
+            health_series = [r.overall_health_score for r in reports]
+            crit_series   = [r.critical_count for r in reports]
+            warn_series   = [r.warning_count for r in reports]
+            epoch_idx     = list(range(1, n_frames + 1))
+
+            fig_anom = go.Figure()
+            fig_anom.add_trace(go.Scatter(x=epoch_idx, y=health_series, mode="lines+markers",
+                                           line=dict(color="#38bdf8", width=3), name="Sağlık Skoru (0–100)"))
+            fig_anom.add_trace(go.Bar(x=epoch_idx, y=crit_series,
+                                       marker_color="#ef4444", name="Kritik Anomali", yaxis="y2", opacity=0.7))
+            fig_anom.add_trace(go.Bar(x=epoch_idx, y=warn_series,
+                                       marker_color="#f59e0b", name="Uyarı Anomali", yaxis="y2", opacity=0.7))
+            fig_anom.update_layout(
+                title="Telemetri Çerçeve Bazlı Sağlık Skoru & Anomali Sayısı",
+                xaxis_title="Çerçeve İndeksi",
+                yaxis=dict(title="Sağlık Skoru", range=[0, 110]),
+                yaxis2=dict(title="Anomali Sayısı", overlaying="y", side="right"),
+                template="plotly_dark",
+                height=360,
+                barmode="stack",
+            )
+            st.plotly_chart(fig_anom, use_container_width=True)
+
+        # Last frame anomaly details
+        last_report = reports[-1]
+        if last_report.anomalies:
+            st.markdown("##### 📋 Son Çerçeve Anomali Detayları")
+            anom_rows = [
+                {
+                    "Kanal": a.channel,
+                    "Kategori": a.category.value,
+                    "Şiddet": a.severity.value,
+                    "Tespit Değer": round(a.detected_value, 6),
+                    "Sapma (σ)": a.deviation_sigma,
+                    "Açıklama": a.description[:80],
+                }
+                for a in last_report.anomalies
+            ]
+            st.dataframe(anom_rows, use_container_width=True)
+        else:
+            st.success("✅ Son çerçevede anomali tespit edilmedi.")
+
+        # Channel Z-scores heatmap
+        z_data = {r.epoch_index: r.channel_z_scores for r in reports}
+        channels_list = list(reports[0].channel_z_scores.keys())
+        z_matrix = np.array([[z_data[r.epoch_index].get(ch, 0) for ch in channels_list] for r in reports])
+        fig_zmap = go.Figure(go.Heatmap(
+            z=z_matrix.T,
+            x=epoch_idx,
+            y=channels_list,
+            colorscale="RdBu",
+            zmid=0,
+            colorbar=dict(title="Z-Skor"),
+        ))
+        fig_zmap.update_layout(
+            title="Kanal Z-Skor Isı Haritası (Tüm Çerçeveler)",
+            xaxis_title="Çerçeve",
+            yaxis_title="Telemetri Kanalı",
+            template="plotly_dark",
+            height=320,
+        )
+        st.plotly_chart(fig_zmap, use_container_width=True)

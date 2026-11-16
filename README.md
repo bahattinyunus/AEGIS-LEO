@@ -3,14 +3,14 @@
 # 🛡️ AEGIS-LEO
 ### *Autonomous Edge-AI & Physics-Informed Orbital Safety Shield*
 
-[![Version](https://img.shields.io/badge/Sürüm-v2.1.0-00d4ff?style=for-the-badge&logo=semanticrelease&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Sürüm-v2.2.0-00d4ff?style=for-the-badge&logo=semanticrelease&logoColor=white)](CHANGELOG.md)
 [![NASA Space Apps 2026](https://img.shields.io/badge/NASA%20Space%20Apps-2026%20Ankara-0B3D91.svg?style=for-the-badge&logo=nasa&logoColor=white)](https://www.spaceappschallenge.org/)
 [![Takım](https://img.shields.io/badge/Takım-AYAZ-ff6b35.svg?style=for-the-badge)]()
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)]()
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-45+%20Endpoints-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
-[![Streamlit](https://img.shields.io/badge/Streamlit-16%20Sekmeli%20HUD-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
-[![Testler](https://img.shields.io/badge/Testler-413%2F413%20Geçti-10b981.svg?style=for-the-badge&logo=pytest&logoColor=white)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-50+%20Endpoints-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)]()
+[![Streamlit](https://img.shields.io/badge/Streamlit-17%20Sekmeli%20HUD-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)]()
+[![Testler](https://img.shields.io/badge/Testler-468%2F468%20Geçti-10b981.svg?style=for-the-badge&logo=pytest&logoColor=white)]()
 [![Sunum: 7 Slayt](https://img.shields.io/badge/NASA%20Sunumu-7%20Slayt%20Pitch%20Deck-ec4899.svg?style=for-the-badge&logo=googleslides&logoColor=white)](PRESENTATION.md)
 [![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-eab308.svg?style=for-the-badge)](LICENSE)
 
@@ -35,6 +35,9 @@
 | **9 Bağımsız Ajan** | **< 150 µs Çıkarım** | **3 Termosfer Modeli** | **NASA-STD-8719.14B** |
 | BFT Quorum + Mutlak Veto | INT8 Kuantize & TMR Korumalı | Jacchia-77 / NRLMSISE-00 / Üstel | Otomatik ODAR & FCC 5-Yıl |
 | SHA-256 İmzalı Ateşleme | %88'e Varan $\Delta v$ Tasarrufu | RF / Optik Link & Tutulma DoD | CCSDS 508.0-B-1 CDM & OEM/OPM |
+| **📊 Görev Analitikleri** | **🌦️ 72h Uzay Havası Tahmini** | **☄️ Çok-Nesne Enkaz Matrisi** | **🔍 Telemetri Anomali Tespiti** |
+| 7 Alt Sistem Sağlık Skoru | AR(4)+CME Topluluk Modeli | J2 Düğüm Öngörülü RAAN Tarama | Z-Skor + CUSUM + Mahalanobis |
+| Yakıt & Radyasyon Projeksiyonu | P10/P50/P90 Kp Topluluğu | İkincil Çarpışma Zinciri Tespiti | Fizik Tutarlılık + SEU İmzası |
 
 ---
 
@@ -233,6 +236,7 @@ streamlit run app.py
 | **14** | 🧭 **6-DOF ADCS & Termal Kontrol** | Kuaterniyon slew-to-burn, 4-tekerlek RWA piramidi, MTQ boşaltımı ve 5-düğüm termal denge |
 | **15** | 🔐 **Kuantum-Güvenli Telekomut & Çoklu-ADR Turu** | Post-Kuantum ML-KEM + CCSDS SDLS doğrulama ve Lambert çoklu-enkaz ADR turu |
 | **16** | ☢️ **Radyasyon/SAA, Transfer & TCA Tarama** | SAA proton akı haritası, TID/SEU tahmini, Hohmann/düzlem değişimi/fazlama planlayıcı ve TCA kavuşum taraması |
+| **17** | 📊 **Görev Analitikleri & Anomali Tespiti** | 7 alt sistem sağlık radar grafiği, 72h Kp topluluğu tahmini, enkaz filo risk matrisi ve çok katmanlı telemetri anomali dedektörü |
 
 ---
 
@@ -336,14 +340,14 @@ uvicorn backend.main:app --reload --port 8000
 
 ---
 
-## 🧪 Doğrulama & Test Paketi (413/413)
+## 🧪 Doğrulama & Test Paketi (468/468)
 
 ```bash
 pytest -q
-# 413 passed in 31.75s (%100 Başarılı)
+# 468 passed (%100 Başarılı)
 ```
 
-Tüm fizik motorları, 6-DOF ADCS & RWA/MTQ yönelim kontrolü, 5-düğümlü termal denge, Post-Kuantum ML-KEM CCSDS SDLS telekomut güvenliği, Lambert çoklu-ADR turu, BFT sürü konsensüsü, ADR (EDT + Lazer + 6-DOF), navigasyon (EKF/UKF + Gauss IOD), yer istasyonu link bütçesi, tutulma güç döngüsü, uçtan uca görev hattı ve FastAPI uç noktaları **385 otomatik birim ve entegrasyon testi** ile doğrulanmıştır.
+Tüm fizik motorları, 6-DOF ADCS & RWA/MTQ yönelim kontrolü, 5-düğümlü termal denge, Post-Kuantum ML-KEM CCSDS SDLS telekomut güvenliği, Lambert çoklu-ADR turu, BFT sürü konsensüsü, ADR (EDT + Lazer + 6-DOF), navigasyon (EKF/UKF + Gauss IOD), yer istasyonu link bütçesi, tutulma güç döngüsü, uçtan uca görev hattı ve FastAPI uç noktaları, görev analitikleri motoru, enkaz filo risk matrisi, uzay havası tahmini ve telemetri anomali dedektörü **468 otomatik birim ve entegrasyon testi** ile doğrulanmıştır.
 
 ---
 

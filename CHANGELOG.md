@@ -5,6 +5,52 @@ All notable changes to the **AEGIS-LEO** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-16
+
+### Added
+- **Mission Analytics Engine (`aegis_leo/analytics/mission_analytics.py`)**:
+  - Per-subsystem health scoring (0–100) across 7 subsystems: PROPULSION, COLLISION_RISK, POWER, THERMAL, COMMS, RADIATION, SECURITY.
+  - Per-channel anomaly flagging with `AnomalyFlag` severity (INFO / WARNING / CRITICAL) and threshold-aware descriptions.
+  - Fuel budget burn-rate projection under nominal and storm conditions using Tsiolkovsky mass-flow model.
+  - Radiation life estimation with TID accumulation, annual dose rate, and years-to-limit calculation.
+  - Mission lifecycle stage classifier (LAUNCH_AND_EARLY_ORBIT → COMMISSIONING → NOMINAL → END_OF_LIFE → DEORBIT_SEQUENCE).
+  - Rolling trend analysis across up to 10 historical snapshots using linear regression + residual-variance direction classifier (IMPROVING / STABLE / DEGRADING / VOLATILE).
+  - `MissionAnalyticsEngine` stateful class and `analyze_mission_health` stateless convenience function.
+- **Advanced Debris Tracker (`aegis_leo/analytics/debris_tracker.py`)**:
+  - `TrackedObject` Keplerian state with auto-computed mean motion and orbital period.
+  - All-pairs conjunction screening using analytic RAAN-plane crossing times, J2 secular nodal precession (`_secular_j2_raan_rate`), and altitude shell pre-filter.
+  - A-DRI-inspired `_compute_conjunction_risk_score` per pair (miss distance, relative speed, area/mass, altitude band).
+  - Secondary conjunction chain detection: post-evasion manoeuvre proxy orbit screened against catalogue.
+  - `DebrisFleetRiskMatrix` output with `top_threats(n)` ranking method.
+  - `build_synthetic_catalogue` and `build_debris_risk_matrix` convenience builders for rapid testing.
+- **Probabilistic Space Weather Forecast Engine (`aegis_leo/physics/space_weather_forecast.py`)**:
+  - AR(4) Kp autoregressive predictor seeded from OMNI2-derived autocorrelation coefficients.
+  - AR(2) F10.7 solar flux predictor with 27-day rotation noise.
+  - CME transit model (Wang et al. 2004 empirical) with probabilistic Kp injection and onset confidence interval.
+  - 50-member Monte Carlo ensemble producing hourly P10/P50/P90 Kp and F10.7 traces for up to 72 h.
+  - Per-hour thermospheric density factor μ(t) and along-track drift rate accumulation.
+  - `StormOnsetAlert` early-warning trigger when P_storm(24h) > 70% or CME onset confidence > 40%.
+  - `SpaceWeatherForecaster` class and `run_space_weather_forecast` convenience function.
+- **Multi-layer Telemetry Anomaly Detector (`aegis_leo/ai/anomaly_detector.py`)**:
+  - Per-channel sliding-window Z-score outlier detection (configurable σ threshold).
+  - CUSUM (Cumulative SUM) control chart for change-point detection on each channel.
+  - Multivariate Mahalanobis distance anomaly detection across all telemetry channels simultaneously.
+  - Physics consistency checks: vis-viva orbital energy, power balance (eclipse vs sunlit), thermal node operational limits, Tsiolkovsky fuel mass budget (±10% tolerance).
+  - SEU bit-flip signature detection in PINN output stream using modified Z-score (robust to Gaussian outliers).
+  - `TelemetryAnomalyDetector` stateful class and `detect_telemetry_anomalies` batch convenience function.
+- **5 New REST API Endpoints (`backend/main.py` — Wave 5)**:
+  - `POST /api/analytics/mission-health`: Full subsystem health KPI snapshot.
+  - `POST /api/analytics/debris-risk-matrix`: Multi-object debris fleet conjunction matrix.
+  - `POST /api/space-weather/forecast`: 24–72 h ensemble Kp/density forecast with CME model.
+  - `POST /api/analytics/detect-anomalies`: Batch telemetry frame anomaly detection.
+  - `GET /api/analytics/subsystem-trends`: Rolling subsystem trend analysis across synthetic epochs.
+- **Streamlit Mission Control Tab 17 (`app.py`)**:
+  - Sub-tab 1 — 🏥 Görev Sağlık Panosu: Subsystem radar chart, KPI cards, anomaly list.
+  - Sub-tab 2 — 🌦️ Uzay Havası Tahmini: Interactive Kp P10/P50/P90 ensemble, density factor trace, CME alerts.
+  - Sub-tab 3 — ☄️ Enkaz Filo Risk Matrisi: TCA scatter plot, top-5 threat table, secondary chain warning.
+  - Sub-tab 4 — 🔍 Telemetri Anomali Dedektörü: Health-score time series, anomaly bar overlay, channel Z-score heatmap.
+- **Test suite expanded to 468/468 passing tests**.
+
 ## [2.1.0] - 2026-11-15
 
 ### Added
